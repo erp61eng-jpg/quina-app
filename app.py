@@ -85,7 +85,7 @@ def construir_todos_grupos():
     return grupos
 
 # ==============================================================================
-# 3. MOTOR ESTATÍSTICO DINÂMICO
+# 3. MOTOR ESTATÍSTICO & FUNIL DE ONDAS DE ELLIOTT
 # ==============================================================================
 def contar_consecutivos(jogo):
     maior = seq = 1
@@ -96,6 +96,81 @@ def contar_consecutivos(jogo):
         else:
             seq = 1
     return maior
+
+def calcular_funil_elliott(historico_fatia):
+    """
+    Sistema de Funil com base nas Ondas de Elliott:
+    - Identifica a aceleração da onda (Momentum = Freq recente - Freq passada)
+    - Bonifica o ponto de retração de Fibonacci no atraso (1, 2, 3, 5 concursos)
+    - Penaliza dezenas em topo de onda / saturação (exaustão estatística)
+    """
+    total_jogos = len(historico_fatia)
+    metade = max(1, total_jogos // 2)
+    jogos_antigos = historico_fatia[:metade]
+    jogos_recentes = historico_fatia[metade:]
+    
+    cnt_antigos = Counter()
+    for s in jogos_antigos: cnt_antigos.update(s)
+    
+    cnt_recentes = Counter()
+    for s in jogos_recentes: cnt_recentes.update(s)
+    
+    cnt_total = Counter()
+    for s in historico_fatia: cnt_total.update(s)
+    
+    scores = {}
+    detalhes_funil = []
+
+    for num in range(1, 81):
+        f_rec = cnt_recentes[num]
+        f_ant = cnt_antigos[num]
+        f_tot = cnt_total[num]
+        
+        # Cálculo de Atraso Atual
+        atraso = 0
+        for s in reversed(historico_fatia):
+            if num in s:
+                break
+            atraso += 1
+
+        # 1. Onda Impulsiva (Momentum de Aceleração)
+        momentum = f_rec - f_ant
+        pts_momentum = momentum * 2.5
+
+        # 2. Ponto de Reversão / Retomada Fibonacci no Atraso (1, 2, 3, 5)
+        pts_fibonacci = 0.0
+        if atraso in [1, 2]:
+            pts_fibonacci = 4.0   # Alta probabilidade de repetição/continuidade
+        elif atraso in [3, 4, 5]:
+            pts_fibonacci = 3.0   # Janela de quebra de ciclo
+        elif atraso in [6, 7, 8]:
+            pts_fibonacci = 1.5
+        elif atraso > 15:
+            pts_fibonacci = -3.0  # Em hibernação / fora da onda ativa
+
+        # 3. Penalidade por Exaustão (Topo de Onda 5)
+        pts_exaustao = 0.0
+        if f_rec >= 4 and len(jogos_recentes) <= 10:
+            pts_exaustao = -3.5  # Saturação crítica
+
+        # Score Composto do Funil
+        score_final = (f_tot * 1.5) + pts_momentum + pts_fibonacci + pts_exaustao
+        scores[num] = score_final
+
+        detalhes_funil.append({
+            "num": num,
+            "score": score_final,
+            "f_tot": f_tot,
+            "f_rec": f_rec,
+            "momentum": momentum,
+            "atraso": atraso
+        })
+
+    # Ordena pelo Score do Funil
+    dezenas_ordenadas = sorted(scores.keys(), key=lambda d: scores[d], reverse=True)
+    top_20_elliott = sorted(dezenas_ordenadas[:20])
+    
+    return top_20_elliott, sorted(detalhes_funil, key=lambda x: x["score"], reverse=True)
 
 def calcular_estatisticas_dinamicas(historico_fatia, grupos_base):
     cnt_dezenas = Counter()
@@ -189,6 +264,7 @@ with st.sidebar:
 
 historico_ativo = st.session_state.historico_sorteios[-qtd_analise:]
 stats = calcular_estatisticas_dinamicas(historico_ativo, st.session_state.grupos_base)
+top20_elliott, lista_funil_detalhada = calcular_funil_elliott(historico_ativo)
 
 if "qtd_analise_ant" not in st.session_state or st.session_state.qtd_analise_ant != qtd_analise:
     st.session_state.qtd_analise_ant = qtd_analise
@@ -249,7 +325,6 @@ def validar_jogo(cand, cand_set, regras_compiladas, f_soma, r_soma, f_consec, m_
 
 def gerar_fechamento_guloso(dezenas, garantia):
     nums = sorted(dezenas)
-    # Garantia de 100% de Quina se acertar 5
     if "Quina" in garantia:
         escolhidos = [sorted(list(c)) for c in combinations(nums, 5)]
         return escolhidos, 100.0
@@ -333,10 +408,10 @@ def renderizar_volante_8x10(jogo, titulo=""):
 # 7. INTERFACE PRINCIPAL
 # ==============================================================================
 st.title("🎯 Quina: Laboratório & Fechamentos")
-st.caption(f"Análise Ativa: Últimos {qtd_analise} Concursos.")
+st.caption(f"Análise Ativa: Últimos {qtd_analise} Concursos • Sistema de Funil (Ondas de Elliott).")
 
 tab_fechamento, tab_gerador, tab_conferir, tab_filtros, tab_hist, tab_volante = st.tabs([
-    "🎯 Fechamentos & Filtros",
+    "🎯 Fechamentos & Funil de Elliott",
     "🚀 Gerador de Apostas",
     "🎟️ Conferir Jogos (TXT)",
     "⚙️ Filtros & Estatísticas",
@@ -350,11 +425,11 @@ diag_dir = [f"Diag Direita {i:02d}" for i in range(1, 11)]
 diag_esq = [f"Diag Esquerda {i:02d}" for i in range(1, 11)]
 
 # ==============================================================================
-# ABA: FECHAMENTO + FILTRAGEM / DEPURAÇÃO
+# ABA: FECHAMENTO COM FUNIL DE ELLIOTT EDITÁVEL
 # ==============================================================================
 with tab_fechamento:
-    st.subheader(f"1. Frequência das Dezenas (Últimos {qtd_analise} Concursos)")
-    st.caption("Quantidade de saídas de cada dezena na janela selecionada:")
+    st.subheader(f"1. Frequência Direta (Últimos {qtd_analise} Concursos)")
+    st.caption("Quantidade de saídas de cada número na janela selecionada:")
 
     linhas_texto = []
     for r in range(8):
@@ -367,55 +442,66 @@ with tab_fechamento:
     st.text("\n".join(linhas_texto))
 
     st.divider()
-    st.subheader("2. Escolha Manual e Garantia Matemática")
-    st.caption("Digite manualmente de 7 a 20 dezenas separadas por espaço (ex: 05 12 18 23 32 44 59 71):")
+    st.subheader("2. As 20 Dezenas Selecionadas pelo Funil de Elliott")
+    st.caption("Baseadas em aceleração da onda (Momentum), ciclos de retração de Fibonacci e descarte de exaustão:")
+
+    str_sugestao_20 = " ".join([f"{n:02d}" for n in top20_elliott])
+    st.code(f"Top 20 Elliott: {str_sugestao_20}")
+
+    with st.expander("Ver Raio-X do Funil (Pontuação das Dezenas)"):
+        df_funil = pd.DataFrame(lista_funil_detalhada[:20])
+        df_funil.columns = ["Dezena", "Score Funil", "Total Saídas", "Saídas Recentes", "Momentum (Onda)", "Atraso Atual"]
+        st.dataframe(df_funil, use_container_width=True)
+
+    st.divider()
+    st.subheader("3. Dezenas do Fechamento (Editável)")
+    st.caption("As 20 dezenas do Funil de Elliott já vêm preenchidas abaixo. Você pode apagar, trocar ou digitar qualquer outra dezena livremente (de 7 a 20 números):")
 
     c_fech1, c_fech2 = st.columns([3, 1])
     with c_fech1:
         entrada_manual = st.text_input(
-            "Suas Dezenas (7 a 20 números):",
-            placeholder="Ex: 05 12 18 23 32 44 59 71"
+            "Dezenas Selecionadas:",
+            value=str_sugestao_20,
+            help="Altere, adicione ou remova números mantendo entre 7 e 20 dezenas."
         )
     with c_fech2:
         gar = st.selectbox(
             "Garantia Matemática:",
             [
-                "Quina (Garante 5 se 5 - 100% Fechado)",
                 "Quadra (Garante 4 se 5)",
-                "Terno (Garante 3 se 5)"
+                "Terno (Garante 3 se 5)",
+                "Quina (Garante 5 se 5 - 100% Fechado)"
             ]
         )
 
     dezenas_digitadas = extrair_dezenas_texto(entrada_manual)
-
-    if entrada_manual.strip():
-        st.write(f"Dezenas identificadas ({len(dezenas_digitadas)}): `{' - '.join([f'{n:02d}' for n in dezenas_digitadas])}`")
+    st.write(f"Dezenas ativas no bilhete ({len(dezenas_digitadas)}): `{' - '.join([f'{n:02d}' for n in dezenas_digitadas])}`")
 
     if len(dezenas_digitadas) < 7:
         st.info("Digite pelo menos 7 dezenas para calcular o fechamento.")
     elif len(dezenas_digitadas) > 20:
-        st.error(f"Você digitou {len(dezenas_digitadas)} dezenas. O limite máximo é 20.")
+        st.error(f"Você informou {len(dezenas_digitadas)} dezenas. O limite máximo permitido é 20.")
     else:
         if st.button("Calcular Desdobramento Fechado 🧮", use_container_width=True):
             with st.spinner("Processando combinações..."):
                 j_fech, cob = gerar_fechamento_guloso(dezenas_digitadas, gar)
                 st.session_state.jogos_fechamento = j_fech
                 st.session_state.taxa_cobertura = cob
-                st.session_state.jogos_fechamento_filtrados = []  # reinicia filtro se gerar novo fechamento
+                st.session_state.jogos_fechamento_filtrados = []
 
     if st.session_state.jogos_fechamento:
         qtd_bruta = len(st.session_state.jogos_fechamento)
-        st.success(f"Fechamento Bruto Calculado: **{qtd_bruta} jogos gerados** (Garantia: {st.session_state.get('taxa_cobertura', 100):.1f}%)")
+        st.success(f"Fechamento Bruto: **{qtd_bruta} jogos gerados** (Garantia: {st.session_state.get('taxa_cobertura', 100):.1f}%)")
 
         st.divider()
-        st.subheader("3. Depuração do Fechamento com Filtros Ativos")
-        st.caption("Passe os jogos gerados pelos filtros ativos da aba '⚙️ Filtros & Estatísticas' (Soma, Consecutivos, Diagonais, etc.) para descartar jogos improváveis e reduzir a quantidade de apostas.")
+        st.subheader("4. Depuração e Redução por Filtros Ativos")
+        st.caption("Passe os jogos gerados pelos filtros da aba '⚙️ Filtros & Estatísticas' para descartar combinações improváveis e baratear o jogo.")
 
         if st.button("Depurar e Reduzir Jogos com Filtros Ativos 🧹", use_container_width=True):
             regras_comp = [(frozenset(st.session_state.grupos_base[k]), v["min"], v["max"]) for k, v in st.session_state.regras_ativas.items() if v["ativo"]]
             jogos_depurados = []
             
-            with st.spinner("Filtrando e depurando jogos..."):
+            with st.spinner("Filtrando apostas..."):
                 for c in st.session_state.jogos_fechamento:
                     if validar_jogo(c, set(c), regras_comp,
                                     st.session_state.filtro_soma_ativo, st.session_state.faixa_soma,
@@ -431,13 +517,12 @@ with tab_fechamento:
             if jogos_depurados:
                 qtd_dep = len(jogos_depurados)
                 reducao = ((qtd_bruta - qtd_dep) / qtd_bruta) * 100
-                st.success(f"🎉 Depuração Concluída! De **{qtd_bruta}** jogos brutos, restaram apenas **{qtd_dep} jogos aprovados** (Redução de **{reducao:.1f}%** no custo).")
+                st.success(f"🎉 Depuração Concluída! De **{qtd_bruta}** apostas brutas, restaram apenas **{qtd_dep} jogos aprovados** (Redução de **{reducao:.1f}%** no custo).")
             else:
-                st.error("Nenhum jogo do fechamento passou em todos os filtros ativos simultaneamente. Alivie alguns filtros na aba '⚙️ Filtros & Estatísticas'.")
+                st.error("Nenhum jogo do fechamento passou em todos os filtros. Alivie algumas regras na aba de Filtros.")
 
-        # Exibição dos jogos depurados
         if st.session_state.jogos_fechamento_filtrados:
-            st.write(f"### 📋 Jogos Depurados e Prontos para Jogar ({len(st.session_state.jogos_fechamento_filtrados)} apostas):")
+            st.write(f"### 📋 Apostas Depuradas e Aprovadas ({len(st.session_state.jogos_fechamento_filtrados)} jogos):")
             st.download_button(
                 "📥 Baixar Jogos Depurados em TXT",
                 data=converter_para_txt(st.session_state.jogos_fechamento_filtrados),
@@ -448,8 +533,7 @@ with tab_fechamento:
             for i, j in enumerate(st.session_state.jogos_fechamento_filtrados):
                 st.code(f"Aposta #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])} | Soma: {sum(j)}")
 
-        # Exibição do fechamento bruto (opcional)
-        with st.expander(f"Ver lista completa do Fechamento Bruto Original ({qtd_bruta} jogos)"):
+        with st.expander(f"Ver lista completa do Fechamento Bruto ({qtd_bruta} apostas)"):
             st.download_button(
                 "📥 Baixar Fechamento Bruto (.TXT)",
                 data=converter_para_txt(st.session_state.jogos_fechamento),
