@@ -157,6 +157,7 @@ if "historico_sorteios" not in st.session_state:
 
 if "jogos_aleatorios" not in st.session_state: st.session_state.jogos_aleatorios = []
 if "jogos_fechamento" not in st.session_state: st.session_state.jogos_fechamento = []
+if "jogos_fechamento_filtrados" not in st.session_state: st.session_state.jogos_fechamento_filtrados = []
 
 # ==============================================================================
 # 5. BARRA LATERAL: CONTROLE DINÂMICO
@@ -247,8 +248,13 @@ def validar_jogo(cand, cand_set, regras_compiladas, f_soma, r_soma, f_consec, m_
     return True
 
 def gerar_fechamento_guloso(dezenas, garantia):
-    k_alvo = 3 if "Terno" in garantia else 4
     nums = sorted(dezenas)
+    # Garantia de 100% de Quina se acertar 5
+    if "Quina" in garantia:
+        escolhidos = [sorted(list(c)) for c in combinations(nums, 5)]
+        return escolhidos, 100.0
+
+    k_alvo = 3 if "Terno" in garantia else 4
     alvos_totais = set(combinations(nums, k_alvo))
     total_alvos = len(alvos_totais)
     candidatos = list(combinations(nums, 5))
@@ -301,18 +307,41 @@ def ler_arquivo_jogos_txt(conteudo_texto):
                     jogos.append(sorted(cands[:5]))
     return jogos
 
+def renderizar_volante_8x10(jogo, titulo=""):
+    marcadas = set(jogo)
+    grid_html = f"""
+    <style>
+        .volante-box {{ background:#ffffff; border:2px solid #2e7d32; border-radius:10px; padding:14px; width:fit-content; margin:8px auto; }}
+        .volante-grid {{ display:grid; grid-template-columns:repeat(10, 36px); gap:5px; }}
+        .v-cell {{ width:36px; height:36px; border:1px solid #dcdcdc; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:12px; color:#555; background:#fafafa; font-weight:500; }}
+        .v-marcada {{ background:linear-gradient(135deg, #1b5e20, #2e7d32) !important; color:#ffffff !important; border:2px solid #0b4317 !important; font-weight:bold; }}
+    </style>
+    <div class="volante-box">
+    """
+    if titulo:
+        grid_html += f"<p style='font-weight:700; font-size:15px; margin-bottom:10px; color:#1b5e20; text-align:center;'>{titulo}</p>"
+    grid_html += '<div class="volante-grid">'
+    for r in range(8):
+        for c in range(10):
+            num = r * 10 + c + 1
+            cls = "v-cell v-marcada" if num in marcadas else "v-cell"
+            grid_html += f'<div class="{cls}">{num:02d}</div>'
+    grid_html += "</div></div>"
+    st.markdown(grid_html, unsafe_allow_html=True)
+
 # ==============================================================================
 # 7. INTERFACE PRINCIPAL
 # ==============================================================================
 st.title("🎯 Quina: Laboratório & Fechamentos")
 st.caption(f"Análise Ativa: Últimos {qtd_analise} Concursos.")
 
-tab_fechamento, tab_gerador, tab_conferir, tab_filtros, tab_hist = st.tabs([
-    "🎯 Fechamentos (Manual)",
+tab_fechamento, tab_gerador, tab_conferir, tab_filtros, tab_hist, tab_volante = st.tabs([
+    "🎯 Fechamentos & Filtros",
     "🚀 Gerador de Apostas",
     "🎟️ Conferir Jogos (TXT)",
     "⚙️ Filtros & Estatísticas",
-    f"📜 Concursos ({qtd_analise}) & Diagonais"
+    f"📜 Concursos ({qtd_analise}) & Diagonais",
+    "🗺️ Volante Visual 8x10"
 ])
 
 hist_sets = [set(j) for j in historico_ativo]
@@ -321,13 +350,12 @@ diag_dir = [f"Diag Direita {i:02d}" for i in range(1, 11)]
 diag_esq = [f"Diag Esquerda {i:02d}" for i in range(1, 11)]
 
 # ==============================================================================
-# ABA: FECHAMENTO COM ENTRADA MANUAL E LISTAGEM DE SAÍDAS SIMPLES
+# ABA: FECHAMENTO + FILTRAGEM / DEPURAÇÃO
 # ==============================================================================
 with tab_fechamento:
     st.subheader(f"1. Frequência das Dezenas (Últimos {qtd_analise} Concursos)")
-    st.caption("Quantidade de vezes que cada número saiu na janela selecionada:")
+    st.caption("Quantidade de saídas de cada dezena na janela selecionada:")
 
-    # Exibição limpa em texto/tabela simples sem enfeites visuais
     linhas_texto = []
     for r in range(8):
         linha_nums = []
@@ -336,12 +364,11 @@ with tab_fechamento:
             qtd_saiu = stats["cnt_dezenas"][num]
             linha_nums.append(f"{num:02d}: {qtd_saiu}x")
         linhas_texto.append(" | ".join(linha_nums))
-    
     st.text("\n".join(linhas_texto))
 
     st.divider()
-    st.subheader("2. Escolha Manual das Dezenas")
-    st.caption("Digite manualmente de 7 a 20 dezenas separadas por espaço (exemplo: 05 12 23 34 45 56 67):")
+    st.subheader("2. Escolha Manual e Garantia Matemática")
+    st.caption("Digite manualmente de 7 a 20 dezenas separadas por espaço (ex: 05 12 18 23 32 44 59 71):")
 
     c_fech1, c_fech2 = st.columns([3, 1])
     with c_fech1:
@@ -350,7 +377,14 @@ with tab_fechamento:
             placeholder="Ex: 05 12 18 23 32 44 59 71"
         )
     with c_fech2:
-        gar = st.selectbox("Garantia:", ["Quadra (Garante 4 se 5)", "Terno (Garante 3 se 5)"])
+        gar = st.selectbox(
+            "Garantia Matemática:",
+            [
+                "Quina (Garante 5 se 5 - 100% Fechado)",
+                "Quadra (Garante 4 se 5)",
+                "Terno (Garante 3 se 5)"
+            ]
+        )
 
     dezenas_digitadas = extrair_dezenas_texto(entrada_manual)
 
@@ -362,22 +396,68 @@ with tab_fechamento:
     elif len(dezenas_digitadas) > 20:
         st.error(f"Você digitou {len(dezenas_digitadas)} dezenas. O limite máximo é 20.")
     else:
-        if st.button("Calcular Fechamento", use_container_width=True):
-            with st.spinner("Processando..."):
+        if st.button("Calcular Desdobramento Fechado 🧮", use_container_width=True):
+            with st.spinner("Processando combinações..."):
                 j_fech, cob = gerar_fechamento_guloso(dezenas_digitadas, gar)
                 st.session_state.jogos_fechamento = j_fech
                 st.session_state.taxa_cobertura = cob
+                st.session_state.jogos_fechamento_filtrados = []  # reinicia filtro se gerar novo fechamento
 
     if st.session_state.jogos_fechamento:
-        st.success(f"{len(st.session_state.jogos_fechamento)} jogos gerados. Cobertura: {st.session_state.get('taxa_cobertura', 100):.1f}%")
-        st.download_button(
-            "Baixar Fechamento em TXT",
-            data=converter_para_txt(st.session_state.jogos_fechamento),
-            file_name="fechamento_quina.txt",
-            mime="text/plain"
-        )
-        for i, j in enumerate(st.session_state.jogos_fechamento):
-            st.code(f"Aposta #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])}")
+        qtd_bruta = len(st.session_state.jogos_fechamento)
+        st.success(f"Fechamento Bruto Calculado: **{qtd_bruta} jogos gerados** (Garantia: {st.session_state.get('taxa_cobertura', 100):.1f}%)")
+
+        st.divider()
+        st.subheader("3. Depuração do Fechamento com Filtros Ativos")
+        st.caption("Passe os jogos gerados pelos filtros ativos da aba '⚙️ Filtros & Estatísticas' (Soma, Consecutivos, Diagonais, etc.) para descartar jogos improváveis e reduzir a quantidade de apostas.")
+
+        if st.button("Depurar e Reduzir Jogos com Filtros Ativos 🧹", use_container_width=True):
+            regras_comp = [(frozenset(st.session_state.grupos_base[k]), v["min"], v["max"]) for k, v in st.session_state.regras_ativas.items() if v["ativo"]]
+            jogos_depurados = []
+            
+            with st.spinner("Filtrando e depurando jogos..."):
+                for c in st.session_state.jogos_fechamento:
+                    if validar_jogo(c, set(c), regras_comp,
+                                    st.session_state.filtro_soma_ativo, st.session_state.faixa_soma,
+                                    st.session_state.filtro_consec_ativo, st.session_state.max_consec,
+                                    st.session_state.f_rep_ant_ativo, st.session_state.rep_ant_faixa, ult_set,
+                                    st.session_state.f_max_coinc_ativo, st.session_state.max_coinc_30, hist_sets,
+                                    st.session_state.f_freq_30_ativo, st.session_state.faixa_quentes, st.session_state.faixa_frias,
+                                    stats["quentes"], stats["frias"]):
+                        jogos_depurados.append(c)
+
+            st.session_state.jogos_fechamento_filtrados = jogos_depurados
+            
+            if jogos_depurados:
+                qtd_dep = len(jogos_depurados)
+                reducao = ((qtd_bruta - qtd_dep) / qtd_bruta) * 100
+                st.success(f"🎉 Depuração Concluída! De **{qtd_bruta}** jogos brutos, restaram apenas **{qtd_dep} jogos aprovados** (Redução de **{reducao:.1f}%** no custo).")
+            else:
+                st.error("Nenhum jogo do fechamento passou em todos os filtros ativos simultaneamente. Alivie alguns filtros na aba '⚙️ Filtros & Estatísticas'.")
+
+        # Exibição dos jogos depurados
+        if st.session_state.jogos_fechamento_filtrados:
+            st.write(f"### 📋 Jogos Depurados e Prontos para Jogar ({len(st.session_state.jogos_fechamento_filtrados)} apostas):")
+            st.download_button(
+                "📥 Baixar Jogos Depurados em TXT",
+                data=converter_para_txt(st.session_state.jogos_fechamento_filtrados),
+                file_name="fechamento_depurado.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+            for i, j in enumerate(st.session_state.jogos_fechamento_filtrados):
+                st.code(f"Aposta #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])} | Soma: {sum(j)}")
+
+        # Exibição do fechamento bruto (opcional)
+        with st.expander(f"Ver lista completa do Fechamento Bruto Original ({qtd_bruta} jogos)"):
+            st.download_button(
+                "📥 Baixar Fechamento Bruto (.TXT)",
+                data=converter_para_txt(st.session_state.jogos_fechamento),
+                file_name="fechamento_bruto.txt",
+                mime="text/plain"
+            )
+            for i, j in enumerate(st.session_state.jogos_fechamento):
+                st.code(f"Aposta #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])}")
 
 # ==============================================================================
 # ABA: GERADOR DE APOSTAS
@@ -417,7 +497,8 @@ with tab_gerador:
             "Baixar Jogos em TXT",
             data=converter_para_txt(st.session_state.jogos_aleatorios),
             file_name="apostas_quina.txt",
-            mime="text/plain"
+            mime="text/plain",
+            use_container_width=True
         )
         for i, j in enumerate(st.session_state.jogos_aleatorios):
             st.code(f"Jogo #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])} | Soma: {sum(j)}")
@@ -455,12 +536,22 @@ with tab_conferir:
         else:
             st.error("Nenhum jogo válido de 5 dezenas encontrado no arquivo.")
     else:
-        st.caption("Caso não queira enviar arquivo agora, você também pode testar os jogos gerados nesta sessão:")
-        opcao_sessao = st.selectbox("Usar da memória:", ["Nenhum", "Jogos do Gerador", "Jogos do Fechamento"])
-        if opcao_sessao == "Jogos do Gerador":
-            jogos_conferir = st.session_state.jogos_aleatorios
-        elif opcao_sessao == "Jogos do Fechamento":
+        st.caption("Ou confira apostas geradas na memória desta sessão:")
+        opcao_sessao = st.selectbox(
+            "Usar da memória:",
+            [
+                "Nenhum",
+                "Jogos do Fechamento Depurado (Filtrados)",
+                "Jogos do Fechamento Bruto",
+                "Jogos do Gerador de Apostas"
+            ]
+        )
+        if opcao_sessao == "Jogos do Fechamento Depurado (Filtrados)":
+            jogos_conferir = st.session_state.jogos_fechamento_filtrados
+        elif opcao_sessao == "Jogos do Fechamento Bruto":
             jogos_conferir = st.session_state.jogos_fechamento
+        elif opcao_sessao == "Jogos do Gerador de Apostas":
+            jogos_conferir = st.session_state.jogos_aleatorios
 
     if len(dezenas_extraidas) == 5 and jogos_conferir:
         st.divider()
@@ -625,3 +716,30 @@ with tab_hist:
         })
     df_diags = pd.DataFrame(dados_diags).sort_values(by="Total Saídas", ascending=False)
     st.dataframe(df_diags, use_container_width=True, height=450)
+
+# ==============================================================================
+# ABA: VOLANTE VISUAL
+# ==============================================================================
+with tab_volante:
+    st.subheader("Visualizador da Cartela Oficial 8x10")
+    opcoes_visualizacao = ["Cartela Vazia"]
+    if st.session_state.jogos_fechamento_filtrados:
+        opcoes_visualizacao.extend([f"Fechamento Depurado - #{i+1:02d}" for i in range(len(st.session_state.jogos_fechamento_filtrados))])
+    elif st.session_state.jogos_fechamento:
+        opcoes_visualizacao.extend([f"Fechamento Bruto - #{i+1:02d}" for i in range(len(st.session_state.jogos_fechamento))])
+    if st.session_state.jogos_aleatorios:
+        opcoes_visualizacao.extend([f"Gerador - #{i+1:02d}" for i in range(len(st.session_state.jogos_aleatorios))])
+
+    escolha = st.selectbox("Selecione um jogo para ver na cartela:", opcoes_visualizacao)
+    jogo_exibir = []
+    if "Depurado" in escolha:
+        idx = int(escolha.split("#")[1]) - 1
+        jogo_exibir = st.session_state.jogos_fechamento_filtrados[idx]
+    elif "Fechamento Bruto" in escolha:
+        idx = int(escolha.split("#")[1]) - 1
+        jogo_exibir = st.session_state.jogos_fechamento[idx]
+    elif "Gerador" in escolha:
+        idx = int(escolha.split("#")[1]) - 1
+        jogo_exibir = st.session_state.jogos_aleatorios[idx]
+
+    renderizar_volante_8x10(jogo_exibir, titulo=escolha)
