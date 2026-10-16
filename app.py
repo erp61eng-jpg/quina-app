@@ -597,4 +597,36 @@ with tab_conferir:
             
             for idx, (jogo, acertos, qtd) in enumerate(detalhes):
                 premio_badge = ""
-                if qtd == 5: premio_badge = "🏆 **QU
+                if qtd == 5: premio_badge = "🏆 **QUINA!**"
+                elif qtd == 4: premio_badge = "🎯 **QUADRA!**"
+                elif qtd == 3: premio_badge = "🥈 **TERNO!**"
+                elif qtd == 2: premio_badge = "🥉 **DUQUE!**"
+                else: premio_badge = "❌ Não premiado"
+                
+                jogo_formatado = " ".join([f"**[{n:02d}]**" if n in acertos else f"{n:02d}" for n in jogo])
+                st.markdown(f"- **Aposta #{idx+1:02d}:** `{jogo_formatado}` — **{qtd} acertos** ({premio_badge})")
+                
+    elif len(resultado_oficial) != 5:
+        st.info("ℹ️ Introduza exatamente **5 dezenas sorteadas** para realizar a conferência.")
+
+# ABA 6: VOLANTE
+with tab_volante:
+    st.subheader("Visualizador da Cartela Oficial 8x10")
+    
+    opcoes_visualizacao = ["Cartela Vazia"]
+    if st.session_state.jogos_aleatorios:
+        opcoes_visualizacao.extend([f"Gerador - Jogo #{i+1:02d}" for i in range(len(st.session_state.jogos_aleatorios))])
+    if st.session_state.jogos_fechamento:
+        opcoes_visualizacao.extend([f"Fechamento - Jogo #{i+1:02d}" for i in range(len(st.session_state.jogos_fechamento))])
+    
+    escolha = st.selectbox("Selecione um jogo para mapear no volante:", opcoes_visualizacao)
+    
+    jogo_exibir = []
+    if "Gerador" in escolha:
+        idx = int(escolha.split("#")[1]) - 1
+        jogo_exibir = st.session_state.jogos_aleatorios[idx]
+    elif "Fechamento" in escolha:
+        idx = int(escolha.split("#")[1]) - 1
+        jogo_exibir = st.session_state.jogos_fechamento[idx]
+        
+    renderizar_volante_8x10(jogo_exibir, titulo=escolha)
