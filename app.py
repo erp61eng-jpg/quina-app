@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import re
 from itertools import combinations
 from collections import defaultdict, Counter
 import pandas as pd
@@ -114,9 +115,9 @@ if "jogos_fechamento" not in st.session_state: st.session_state.jogos_fechamento
 def processar_frequencia(historico):
     cnt = Counter()
     for j in historico: cnt.update(j)
-    nums = sorted(range(1, 81), key=lambda d: cnt[d], reverse=True)
+    nums = sorted(range(1, 81), key=lambda d: (cnt[d], -d), reverse=True)
     c1, c2 = 27, 54
-    return set(nums[:c1]), set(nums[c1:c2]), set(nums[c2:]), cnt
+    return set(nums[:c1]), set(nums[c1:c2]), set(nums[c2:]), cnt, nums
 
 def contar_consecutivos(jogo):
     maior = seq = 1
@@ -185,6 +186,11 @@ def gerar_fechamento_guloso(dezenas, garantia):
 def converter_para_txt(jogos):
     return "\n".join([" ".join([f"{n:02d}" for n in j]) for j in jogos])
 
+def extrair_dezenas_texto(texto):
+    numeros = re.findall(r'\b\d+\b', texto)
+    validos = [int(n) for n in numeros if 1 <= int(n) <= 80]
+    return sorted(list(set(validos)))
+
 # ==============================================================================
 # 5. VOLANTE OFICIAL 8x10
 # ==============================================================================
@@ -214,17 +220,18 @@ def renderizar_volante_8x10(jogo, titulo=""):
 # 6. INTERFACE PRINCIPAL DA QUINA
 # ==============================================================================
 st.title("🎯 Quina: Laboratório & Fechamentos")
-st.caption("Matriz Oficial 8x10 • Apostas de 5 Dezenas • Restrições Estruturais e Diagonais Cilíndricas.")
+st.caption("Matriz Oficial 8x10 • Apostas de 5 Dezenas • Conferência Oficial e Estatística.")
 
-tab_filtros, tab_hist, tab_gerador, tab_fechamento, tab_volante = st.tabs([
+tab_filtros, tab_hist, tab_gerador, tab_fechamento, tab_conferir, tab_volante = st.tabs([
     "⚙️ Filtros e Padrões",
     "📜 30 Concursos",
     "🚀 Gerador de Jogos",
-    "🎯 Fechamentos (Quadra/Terno)",
+    "🎯 Fechamentos Matemáticos",
+    "🎟️ Conferir Jogos",
     "🗺️ Volante Visual 8x10"
 ])
 
-quentes_30, medias_30, frias_30, freq_cnt = processar_frequencia(st.session_state.historico_sorteios)
+quentes_30, medias_30, frias_30, freq_cnt, ordenados_por_freq = processar_frequencia(st.session_state.historico_sorteios)
 hist_sets = [set(j) for j in st.session_state.historico_sorteios]
 ult_set = set(st.session_state.historico_sorteios[-1]) if st.session_state.historico_sorteios else set()
 
@@ -307,7 +314,7 @@ with tab_hist:
         st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True, height=450)
     with col_hist2:
         st.markdown("**Top 10 Mais Frequentes (Últimos 30):**")
-        top_10 = sorted(freq_cnt.items(), key=lambda x: x[1], reverse=True)[:10]
+        top_10 = [(d, freq_cnt[d]) for d in ordenados_por_freq[:10]]
         st.write(", ".join([f"**{d:02d}** ({qtd}x)" for d, qtd in top_10]))
         st.markdown("**Top 10 Menos Frequentes (Atrasadas):**")
         bot_10 = sorted(freq_cnt.items(), key=lambda x: x[1])[:10]
@@ -361,23 +368,35 @@ with tab_gerador:
 
 # ABA 4: FECHAMENTO
 with tab_fechamento:
-    st.subheader("Fechamentos Matemáticos (Desdobramento Guloso)")
-    dezs = st.multiselect(
-        "Selecione de 7 a 20 dezenas base:", 
-        options=list(range(1, 81)), 
-        default=list(range(1, 11)), 
-        format_func=lambda x: f"{x:02d}"
-    )
-    gar = st.selectbox("Garantia Matemática pretendida:", ["Quadra (Garante 4 se acertar 5)", "Terno (Garante 3 se acertar 5)"])
+    st.subheader("🎯 Fechamentos Matemáticos Inteligentes (7 a 20 Dezenas)")
+    st.caption("As dezenas sugeridas por padrão são as **mais frequentes** dos últimos concursos. Pode alterá-las livremente.")
     
-    if len(dezs) >= 6:
+    # Predefinição inteligente com as dezenas de maior probabilidade histórica
+    sugestao_top10 = ordenados_por_freq[:10]
+    
+    col_f1, col_f2 = st.columns([3, 1])
+    with col_f1:
+        dezs = st.multiselect(
+            "Selecione de 7 a 20 dezenas base:", 
+            options=list(range(1, 81)), 
+            default=sugestao_top10, 
+            format_func=lambda x: f"{x:02d} (saiu {freq_cnt[x]}x)"
+        )
+    with col_f2:
+        gar = st.selectbox("Garantia Matemática:", ["Quadra (Garante 4 se 5)", "Terno (Garante 3 se 5)"])
+
+    st.write(f"📊 Dezenas selecionadas no momento: **{len(dezs)}**")
+    
+    if len(dezs) < 7:
+        st.warning("⚠️ Selecione pelo menos 7 dezenas para processar um fechamento económico.")
+    elif len(dezs) > 20:
+        st.error("⚠️ O limite máximo permitido para fechamentos nesta matriz é de 20 dezenas.")
+    else:
         if st.button("Calcular Matriz Fechada 🧮", use_container_width=True):
-            with st.spinner("Calculando cobertura combinatória..."):
+            with st.spinner("Calculando cobertura combinatória ótima..."):
                 j_fech, cob = gerar_fechamento_guloso(dezs, gar)
                 st.session_state.jogos_fechamento = j_fech
                 st.session_state.taxa_cobertura = cob
-    else:
-        st.info("Selecione pelo menos 6 dezenas para processar um fechamento.")
 
     if st.session_state.jogos_fechamento:
         st.success(f"Fechamento: {len(st.session_state.jogos_fechamento)} jogos gerados (Cobertura: {st.session_state.get('taxa_cobertura', 100):.1f}%)")
@@ -391,7 +410,92 @@ with tab_fechamento:
         for i, j in enumerate(st.session_state.jogos_fechamento):
             st.code(f"Aposta #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])}")
 
-# ABA 5: VOLANTE
+# ABA 5: CONFERIR JOGOS
+with tab_conferir:
+    st.subheader("🎟️ Conferência Oficial de Apostas")
+    st.write("Digite ou selecione as 5 dezenas do sorteio para calcular os prémios obtidos.")
+    
+    col_input1, col_input2 = st.columns([1, 1])
+    with col_input1:
+        res_digitado = st.text_input("Digite o resultado (ex: 05 18 32 54 76):", placeholder="05 18 32 54 76")
+    with col_input2:
+        res_selecionado = st.multiselect(
+            "Ou selecione as 5 dezenas sorteadas:", 
+            options=list(range(1, 81)), 
+            max_selections=5,
+            format_func=lambda x: f"{x:02d}"
+        )
+    
+    # Determina o resultado a ser conferido
+    resultado_oficial = extrair_dezenas_texto(res_digitado) if res_digitado.strip() else sorted(res_selecionado)
+    
+    st.divider()
+    st.markdown("#### Selecione quais jogos quer conferir:")
+    origem_jogos = st.radio(
+        "Origem das apostas:",
+        ["Jogos do Gerador (Aba 🚀)", "Jogos do Fechamento (Aba 🎯)", "Digitar / Colar outras apostas"],
+        horizontal=True
+    )
+    
+    jogos_a_testar = []
+    if "Gerador" in origem_jogos:
+        jogos_a_testar = st.session_state.jogos_aleatorios
+        if not jogos_a_testar:
+            st.info("Ainda não gerou nenhum jogo na Aba '🚀 Gerador de Jogos'.")
+    elif "Fechamento" in origem_jogos:
+        jogos_a_testar = st.session_state.jogos_fechamento
+        if not jogos_a_testar:
+            st.info("Ainda não gerou nenhum fechamento na Aba '🎯 Fechamentos Matemáticos'.")
+    else:
+        apostas_coladas = st.text_area(
+            "Cole os seus jogos (1 jogo por linha, ex: 05 18 32 54 76):",
+            placeholder="05 18 32 54 76\n01 10 25 44 70"
+        )
+        if apostas_coladas.strip():
+            for linha in apostas_coladas.strip().split("\n"):
+                nums_l = extrair_dezenas_texto(linha)
+                if len(nums_l) == 5:
+                    jogos_a_testar.append(nums_l)
+
+    if len(resultado_oficial) == 5 and jogos_a_testar:
+        if st.button("Conferir Todos os Bilhetes 🔍", use_container_width=True):
+            set_res = set(resultado_oficial)
+            contadores = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0, 0: 0}
+            detalhes = []
+            
+            for j in jogos_a_testar:
+                acertos = sorted(list(set(j) & set_res))
+                qtd = len(acertos)
+                contadores[qtd] += 1
+                detalhes.append((j, acertos, qtd))
+            
+            st.markdown(f"### Resultado Oficial: `{' - '.join([f'{n:02d}' for n in resultado_oficial])}`")
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("🏆 QUINA (5)", contadores[5])
+            m2.metric("🎯 QUADRA (4)", contadores[4])
+            m3.metric("🥈 TERNO (3)", contadores[3])
+            m4.metric("🥉 DUQUE (2)", contadores[2])
+            
+            st.divider()
+            st.markdown("#### Detalhe dos Bilhetes Conferidos:")
+            
+            for idx, (jogo, acertos, qtd) in enumerate(detalhes):
+                premio_badge = ""
+                if qtd == 5: premio_badge = "🏆 **QUINA!**"
+                elif qtd == 4: premio_badge = "🎯 **QUADRA!**"
+                elif qtd == 3: premio_badge = "🥈 **TERNO!**"
+                elif qtd == 2: premio_badge = "🥉 **DUQUE!**"
+                else: premio_badge = "❌ Não premiado"
+                
+                # Monta visualização destacando os acertos
+                jogo_formatado = " ".join([f"**[{n:02d}]**" if n in acertos else f"{n:02d}" for n in jogo])
+                st.markdown(f"- **Aposta #{idx+1:02d}:** `{jogo_formatado}` — **{qtd} acertos** ({premio_badge})")
+                
+    elif len(resultado_oficial) != 5:
+        st.info("ℹ️ Introduza exatamente **5 dezenas sorteadas** para realizar a conferência.")
+
+# ABA 6: VOLANTE
 with tab_volante:
     st.subheader("Visualizador da Cartela Oficial 8x10")
     
