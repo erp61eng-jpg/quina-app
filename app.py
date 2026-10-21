@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import random
 import re
 from itertools import combinations
@@ -256,9 +257,10 @@ def calcular_estatisticas_dinamicas(historico_fatia, grupos_base):
     }
 
 # ==============================================================================
-# 4. RENDERIZADORES: HEATMAP TÉRMICO VIVO & VOLANTE VIBRANTE
+# 4. RENDERIZADORES EM IFRAME (ZERO TELA EM BRANCO)
 # ==============================================================================
 def renderizar_heatmap_8x10_vibrante(cnt_dezenas, titulo="Mapa de Calor Térmico da Quina (80 Dezenas)"):
+    """Renderiza via components.html para garantir exibição 100% visível em qualquer versão do Streamlit."""
     todos_valores = [cnt_dezenas[n] for n in range(1, 81)]
     val_min = min(todos_valores) if todos_valores else 0
     val_max = max(todos_valores) if todos_valores else 1
@@ -266,52 +268,76 @@ def renderizar_heatmap_8x10_vibrante(cnt_dezenas, titulo="Mapa de Calor Térmico
 
     def obter_estilo_calor(freq):
         ratio = (freq - val_min) / delta
-        if ratio == 0.0 or freq == 0:
-            return "#e0f2fe", "#0284c7"  # Azul Gelo (Fria)
+        if freq == 0 or ratio == 0.0:
+            return "#dbeafe", "#0369a1"  # Azul Gelo (Fria)
         elif ratio <= 0.25:
-            return "#38bdf8", "#0369a1"  # Ciano Vivo (Baixa)
+            return "#38bdf8", "#075985"  # Ciano (Baixa)
         elif ratio <= 0.50:
-            return "#4ade80", "#065f46"  # Verde Primavera (Média)
+            return "#22c55e", "#ffffff"  # Verde Primavera (Média)
         elif ratio <= 0.70:
-            return "#facc15", "#854d0e"  # Amarelo Sol (Aquecida)
+            return "#eab308", "#713f12"  # Amarelo Ouro (Aquecida)
         elif ratio <= 0.88:
-            return "#fb923c", "#ffffff"  # Laranja Fogo (Quente)
+            return "#f97316", "#ffffff"  # Laranja (Quente)
         else:
-            return "#ef4444", "#ffffff"  # Vermelho Rubi Vivo (Super Quente)
+            return "#ef4444", "#ffffff"  # Vermelho Rubi (Top)
 
-    html = f"""
-    <div style="background:#ffffff; border:2px solid #cbd5e1; border-radius:16px; padding:20px; width:fit-content; margin:15px auto; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
-        <div style="font-size:18px; font-weight:800; color:#0369a1; text-align:center; margin-bottom:16px; font-family:sans-serif; letter-spacing:0.5px;">
-            {titulo}
-        </div>
-        <div style="display:grid; grid-template-columns:repeat(10, 52px); gap:6px; justify-content:center;">
-    """
-
+    celulas_html = ""
     for r in range(8):
         for c in range(10):
             num = r * 10 + c + 1
             f = cnt_dezenas[num]
             bg, text_color = obter_estilo_calor(f)
-            html += f"""
-            <div style="width:52px; height:52px; background:{bg}; color:{text_color}; border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:monospace; border:1px solid rgba(0,0,0,0.1); box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+            celulas_html += f"""
+            <div style="width:50px; height:50px; background:{bg}; color:{text_color}; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:monospace; border:1px solid rgba(0,0,0,0.12); box-shadow:0 1px 3px rgba(0,0,0,0.06);">
                 <span style="font-size:16px; font-weight:900; line-height:1.1;">{num:02d}</span>
                 <span style="font-size:11px; font-weight:800; opacity:0.95;">{f}x</span>
             </div>
             """
 
-    html += f"""
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ margin: 0; padding: 0; background: transparent; font-family: sans-serif; display: flex; justify-content: center; }}
+        .heat-wrapper {{
+            background: #ffffff;
+            border: 2px solid #cbd5e1;
+            border-radius: 14px;
+            padding: 18px;
+            width: fit-content;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }}
+        .heat-grid {{
+            display: grid;
+            grid-template-columns: repeat(10, 50px);
+            gap: 6px;
+            justify-content: center;
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="heat-wrapper">
+        <div style="font-size:17px; font-weight:800; color:#0369a1; text-align:center; margin-bottom:14px; font-family:sans-serif;">
+            {titulo}
         </div>
-        <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-top:18px; font-size:12px; font-family:sans-serif; font-weight:700;">
-            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#e0f2fe; border:1px solid #cbd5e1; display:inline-block;"></span> ❄️ Frias / Zero ({val_min}x)</div>
-            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#38bdf8; display:inline-block;"></span> 💧 Baixas</div>
-            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#4ade80; display:inline-block;"></span> 🌿 Médias</div>
-            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#facc15; display:inline-block;"></span> ☀️ Aquecidas</div>
-            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#fb923c; display:inline-block;"></span> 🔥 Quentes</div>
-            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#ef4444; display:inline-block;"></span> 💥 Top Quentes ({val_max}x)</div>
+        <div class="heat-grid">
+            {celulas_html}
         </div>
-    </div>
+        <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:16px; font-size:12px; font-weight:700;">
+            <div style="display:flex; align-items:center; gap:4px; background:#f8fafc; padding:4px 9px; border-radius:6px; border:1px solid #e2e8f0;"><span style="width:13px; height:13px; border-radius:3px; background:#dbeafe; border:1px solid #cbd5e1; display:inline-block;"></span> ❄️ Frias ({val_min}x)</div>
+            <div style="display:flex; align-items:center; gap:4px; background:#f8fafc; padding:4px 9px; border-radius:6px; border:1px solid #e2e8f0;"><span style="width:13px; height:13px; border-radius:3px; background:#38bdf8; display:inline-block;"></span> 💧 Baixas</div>
+            <div style="display:flex; align-items:center; gap:4px; background:#f8fafc; padding:4px 9px; border-radius:6px; border:1px solid #e2e8f0;"><span style="width:13px; height:13px; border-radius:3px; background:#22c55e; display:inline-block;"></span> 🌿 Médias</div>
+            <div style="display:flex; align-items:center; gap:4px; background:#f8fafc; padding:4px 9px; border-radius:6px; border:1px solid #e2e8f0;"><span style="width:13px; height:13px; border-radius:3px; background:#eab308; display:inline-block;"></span> ☀️ Aquecidas</div>
+            <div style="display:flex; align-items:center; gap:4px; background:#f8fafc; padding:4px 9px; border-radius:6px; border:1px solid #e2e8f0;"><span style="width:13px; height:13px; border-radius:3px; background:#f97316; display:inline-block;"></span> 🔥 Quentes</div>
+            <div style="display:flex; align-items:center; gap:4px; background:#f8fafc; padding:4px 9px; border-radius:6px; border:1px solid #e2e8f0;"><span style="width:13px; height:13px; border-radius:3px; background:#ef4444; display:inline-block;"></span> 💥 Top ({val_max}x)</div>
+        </div>
+      </div>
+    </body>
+    </html>
     """
-    st.markdown(html, unsafe_allow_html=True)
+    components.html(full_html, height=560, scrolling=False)
 
 def renderizar_card_aposta_colorido(idx, jogo, extra=""):
     dezenas_html = "".join([
@@ -369,26 +395,64 @@ def renderizar_card_conferencia_colorido(idx, jogo, acertos, tag, qtd):
     st.markdown(html, unsafe_allow_html=True)
 
 def renderizar_volante_8x10(jogo, titulo=""):
+    """Renderiza o volante oficial em components.html para garantir visualização perfeita."""
     marcadas = set(jogo)
-    grid_html = f"""
-    <style>
-        .volante-box {{ background:#ffffff; border:2px solid #0284c7; border-radius:14px; padding:16px; width:fit-content; margin:12px auto; box-shadow:0 4px 16px rgba(2,132,199,0.15); }}
-        .volante-grid {{ display:grid; grid-template-columns:repeat(10, 38px); gap:6px; }}
-        .v-cell {{ width:38px; height:38px; border:1px solid #cbd5e1; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px; color:#475569; background:#f8fafc; font-weight:600; transition:all 0.2s; }}
-        .v-marcada {{ background:linear-gradient(135deg, #0284c7, #0369a1) !important; color:#ffffff !important; border:2px solid #075985 !important; font-weight:800 !important; box-shadow:0 2px 8px rgba(2,132,199,0.45); transform:scale(1.05); }}
-    </style>
-    <div class="volante-box">
-    """
-    if titulo:
-        grid_html += f"<p style='font-weight:800; font-size:16px; margin-bottom:12px; color:#0369a1; text-align:center; letter-spacing:0.5px;'>{titulo}</p>"
-    grid_html += '<div class="volante-grid">'
+    celulas_html = ""
     for r in range(8):
         for c in range(10):
             num = r * 10 + c + 1
-            cls = "v-cell v-marcada" if num in marcadas else "v-cell"
-            grid_html += f'<div class="{cls}">{num:02d}</div>'
-    grid_html += "</div></div>"
-    st.markdown(grid_html, unsafe_allow_html=True)
+            if num in marcadas:
+                bg = "linear-gradient(135deg, #0284c7, #0369a1)"
+                color = "#ffffff"
+                border = "2px solid #075985"
+                weight = "800"
+            else:
+                bg = "#f8fafc"
+                color = "#475569"
+                border = "1px solid #cbd5e1"
+                weight = "600"
+            celulas_html += f"""
+            <div style="width:38px; height:38px; background:{bg}; color:{color}; border:{border}; font-weight:{weight}; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px;">
+                {num:02d}
+            </div>
+            """
+
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ margin:0; padding:0; background:transparent; display:flex; justify-content:center; font-family:sans-serif; }}
+        .volante-box {{
+            background: #ffffff;
+            border: 2px solid #0284c7;
+            border-radius: 14px;
+            padding: 16px;
+            width: fit-content;
+            box-shadow: 0 4px 16px rgba(2,132,199,0.15);
+        }}
+        .volante-grid {{
+            display: grid;
+            grid-template-columns: repeat(10, 38px);
+            gap: 6px;
+            justify-content: center;
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="volante-box">
+        <div style="font-weight:800; font-size:16px; margin-bottom:12px; color:#0369a1; text-align:center;">
+            {titulo}
+        </div>
+        <div class="volante-grid">
+            {celulas_html}
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    components.html(full_html, height=450, scrolling=False)
 
 # ==============================================================================
 # 5. CONTROLE DE ESTADO & REGRAS
