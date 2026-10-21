@@ -1,5 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import random
 import re
 from itertools import combinations
@@ -12,10 +14,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# ==============================================================================
-# 1. BASE HISTÓRICA DOS ÚLTIMOS 50 CONCURSOS DA QUINA (80 DEZENAS / 5 SORTEADAS)
-# ==============================================================================
-HISTORICO_50_QUINA = [
+TOTAL_NUMS = 80
+TAMANHO_JOGO = 5
+QTD_LINHAS = 8
+QTD_COLUNAS = 10
+
+# Base de contingência caso a Caixa esteja temporariamente fora do ar
+FALLBACK_QUINA = [
     [7, 14, 28, 45, 62], [3, 22, 35, 58, 79], [12, 19, 41, 60, 71],
     [5, 27, 33, 52, 68], [1, 18, 39, 44, 76], [9, 25, 48, 63, 75],
     [11, 30, 42, 59, 80], [4, 16, 37, 54, 69], [2, 23, 49, 57, 73],
@@ -35,10 +40,56 @@ HISTORICO_50_QUINA = [
     [5, 19, 45, 52, 71], [1, 28, 35, 44, 68]
 ]
 
-TOTAL_NUMS = 80
-TAMANHO_JOGO = 5
-QTD_LINHAS = 8
-QTD_COLUNAS = 10
+# ==============================================================================
+# 1. CONEXÃO AUTOMÁTICA VIA API OFICIAL DA CAIXA
+# ==============================================================================
+@st.cache_data(ttl=7200, show_spinner=False)
+def buscar_50_concursos_caixa():
+    """Consulta a API oficial da Caixa e busca os últimos 50 sorteios com multithreading."""
+    url_base = "https://servicebus2.caixa.gov.br/portaldeloterias/api/quina"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+    }
+    try:
+        resp = requests.get(url_base, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return None, "Offline"
+        
+        dados_ultimo = resp.json()
+        ultimo_num = int(dados_ultimo["numero"])
+        data_ultimo = dados_ultimo.get("dataApuracao", "")
+        
+        concursos_dict = {}
+        concursos_dict[ultimo_num] = sorted([int(d) for d in dados_ultimo["listaDezenas"]])
+        
+        # Concursos anteriores a serem buscados em paralelo
+        alvos = list(range(max(1, ultimo_num - 49), ultimo_num))
+        
+        def baixar_concurso(num):
+            try:
+                r = requests.get(f"{url_base}/{num}", headers=headers, timeout=5)
+                if r.status_code == 200:
+                    dezenas = [int(d) for d in r.json()["listaDezenas"]]
+                    return num, sorted(dezenas)
+            except Exception:
+                pass
+            return num, None
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            futuros = [executor.submit(baixar_concurso, n) for n in alvos]
+            for f in as_completed(futuros):
+                n_conc, nums = f.result()
+                if nums and len(nums) == 5:
+                    concursos_dict[n_conc] = nums
+
+        lista_cronologica = [concursos_dict[k] for k in sorted(concursos_dict.keys())]
+        if len(lista_cronologica) >= 5:
+            info_txt = f"#{ultimo_num} realizado em {data_ultimo}"
+            return lista_cronologica, info_txt
+    except Exception:
+        pass
+    return None, "Erro de Conexão"
 
 # ==============================================================================
 # 2. MAPEAMENTO MATEMÁTICO DA MATRIZ 8x10 (QUINA)
@@ -152,10 +203,8 @@ def calcular_funil_elliott(historico_fatia):
     
     cnt_antigos = Counter()
     for s in jogos_antigos: cnt_antigos.update(s)
-    
     cnt_recentes = Counter()
     for s in jogos_recentes: cnt_recentes.update(s)
-    
     cnt_total = Counter()
     for s in historico_fatia: cnt_total.update(s)
     
@@ -204,7 +253,6 @@ def calcular_funil_elliott(historico_fatia):
 
     dezenas_ordenadas = sorted(scores.keys(), key=lambda d: scores[d], reverse=True)
     top_40_elliott = sorted(dezenas_ordenadas[:40])
-    
     return top_40_elliott, sorted(detalhes_funil, key=lambda x: x["score"], reverse=True)
 
 def calcular_estatisticas_dinamicas(historico_fatia, grupos_base):
@@ -257,10 +305,9 @@ def calcular_estatisticas_dinamicas(historico_fatia, grupos_base):
     }
 
 # ==============================================================================
-# 4. RENDERIZADORES EM IFRAME (ZERO TELA EM BRANCO)
+# 4. RENDERIZADORES EM IFRAME (HTML ISOLADO: HEATMAP & VOLANTE)
 # ==============================================================================
 def renderizar_heatmap_8x10_vibrante(cnt_dezenas, titulo="Mapa de Calor Térmico da Quina (80 Dezenas)"):
-    """Renderiza via components.html para garantir exibição 100% visível em qualquer versão do Streamlit."""
     todos_valores = [cnt_dezenas[n] for n in range(1, 81)]
     val_min = min(todos_valores) if todos_valores else 0
     val_max = max(todos_valores) if todos_valores else 1
@@ -269,17 +316,17 @@ def renderizar_heatmap_8x10_vibrante(cnt_dezenas, titulo="Mapa de Calor Térmico
     def obter_estilo_calor(freq):
         ratio = (freq - val_min) / delta
         if freq == 0 or ratio == 0.0:
-            return "#dbeafe", "#0369a1"  # Azul Gelo (Fria)
+            return "#dbeafe", "#0369a1"
         elif ratio <= 0.25:
-            return "#38bdf8", "#075985"  # Ciano (Baixa)
+            return "#38bdf8", "#075985"
         elif ratio <= 0.50:
-            return "#22c55e", "#ffffff"  # Verde Primavera (Média)
+            return "#22c55e", "#ffffff"
         elif ratio <= 0.70:
-            return "#eab308", "#713f12"  # Amarelo Ouro (Aquecida)
+            return "#eab308", "#713f12"
         elif ratio <= 0.88:
-            return "#f97316", "#ffffff"  # Laranja (Quente)
+            return "#f97316", "#ffffff"
         else:
-            return "#ef4444", "#ffffff"  # Vermelho Rubi (Top)
+            return "#ef4444", "#ffffff"
 
     celulas_html = ""
     for r in range(8):
@@ -370,18 +417,10 @@ def renderizar_card_conferencia_colorido(idx, jogo, acertos, tag, qtd):
     
     cor_badge = "#64748b"
     bg_badge = "#f1f5f9"
-    if qtd == 5:
-        cor_badge = "#b45309"
-        bg_badge = "#fef3c7"
-    elif qtd == 4:
-        cor_badge = "#dc2626"
-        bg_badge = "#fee2e2"
-    elif qtd == 3:
-        cor_badge = "#16a34a"
-        bg_badge = "#dcfce7"
-    elif qtd == 2:
-        cor_badge = "#0284c7"
-        bg_badge = "#e0f2fe"
+    if qtd == 5: cor_badge, bg_badge = "#b45309", "#fef3c7"
+    elif qtd == 4: cor_badge, bg_badge = "#dc2626", "#fee2e2"
+    elif qtd == 3: cor_badge, bg_badge = "#16a34a", "#dcfce7"
+    elif qtd == 2: cor_badge, bg_badge = "#0284c7", "#e0f2fe"
 
     html = f"""
     <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid {cor_badge}; border-radius:10px; padding:10px 16px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
@@ -395,7 +434,6 @@ def renderizar_card_conferencia_colorido(idx, jogo, acertos, tag, qtd):
     st.markdown(html, unsafe_allow_html=True)
 
 def renderizar_volante_8x10(jogo, titulo=""):
-    """Renderiza o volante oficial em components.html para garantir visualização perfeita."""
     marcadas = set(jogo)
     celulas_html = ""
     for r in range(8):
@@ -455,13 +493,20 @@ def renderizar_volante_8x10(jogo, titulo=""):
     components.html(full_html, height=450, scrolling=False)
 
 # ==============================================================================
-# 5. CONTROLE DE ESTADO & REGRAS
+# 5. INICIALIZAÇÃO DE ESTADO COM CONCURSOS REAIS DA CAIXA
 # ==============================================================================
 if "grupos_base" not in st.session_state:
     st.session_state.grupos_base = construir_todos_grupos()
 
 if "historico_sorteios" not in st.session_state:
-    st.session_state.historico_sorteios = [list(j) for j in HISTORICO_50_QUINA]
+    with st.spinner("Conectando à API da Caixa e buscando os últimos 50 concursos reais..."):
+        dados_oficiais, info_api = buscar_50_concursos_caixa()
+        if dados_oficiais and len(dados_oficiais) >= 5:
+            st.session_state.historico_sorteios = dados_oficiais
+            st.session_state.origem_dados = f"Caixa Oficial ({info_api})"
+        else:
+            st.session_state.historico_sorteios = [list(j) for j in FALLBACK_QUINA]
+            st.session_state.origem_dados = "Base Local de Contingência"
 
 if "jogos_aleatorios" not in st.session_state: st.session_state.jogos_aleatorios = []
 if "jogos_fechamento" not in st.session_state: st.session_state.jogos_fechamento = []
@@ -509,6 +554,8 @@ with st.sidebar:
     st.header("Janela Estatística (Quina)")
     total_disponivel = len(st.session_state.historico_sorteios)
     
+    st.info(f"🌐 **Fonte:** {st.session_state.get('origem_dados', 'Caixa Oficial')}")
+    
     qtd_analise = st.slider(
         "Quantidade de Concursos:",
         min_value=5,
@@ -516,8 +563,17 @@ with st.sidebar:
         value=min(30, total_disponivel),
         step=1
     )
-    st.caption(f"Analisando os últimos {qtd_analise} sorteios da Quina.")
+    st.caption(f"Analisando os últimos {qtd_analise} sorteios.")
     auto_sinc = st.checkbox("Sincronizar Filtros Automaticamente", value=True)
+
+    if st.button("🔄 Atualizar Resultados da Caixa Agora", use_container_width=True):
+        st.cache_data.clear()
+        dados_oficiais, info_api = buscar_50_concursos_caixa()
+        if dados_oficiais:
+            st.session_state.historico_sorteios = dados_oficiais
+            st.session_state.origem_dados = f"Caixa Oficial ({info_api})"
+            st.success("Resultados oficiais atualizados!")
+            st.rerun()
 
     with st.expander("Inserir Concurso Manual"):
         novo_jogo_txt = st.text_input("5 Dezenas (ex: 07 14 28 45 62):")
@@ -548,12 +604,6 @@ elif st.session_state.historico_fingerprint != fingerprint_atual:
     if auto_sinc:
         sincronizar_filtros_com_historico(stats, top40_elliott)
 
-with st.sidebar:
-    if st.button("🔄 Recalibrar Filtros Agora", use_container_width=True):
-        sincronizar_filtros_com_historico(stats, top40_elliott)
-        st.success("Filtros sincronizados!")
-        st.rerun()
-
 # ==============================================================================
 # 7. COMBINATÓRIA, DESDOBRAMENTO (5 DEZENAS) & VALIDAÇÃO
 # ==============================================================================
@@ -561,32 +611,25 @@ def validar_jogo(cand, cand_set, regras_compiladas, f_soma, r_soma, f_consec, m_
                  f_rep, r_rep, ult_set, f_coinc, max_c, hist_sets,
                  f_freq, r_q, r_f, s_q, s_f,
                  f_quads, max_q, min_q, q_sets):
-    if f_soma and not (r_soma[0] <= sum(cand) <= r_soma[1]):
-        return False
-    if f_consec and contar_consecutivos(cand) > m_consec:
-        return False
+    if f_soma and not (r_soma[0] <= sum(cand) <= r_soma[1]): return False
+    if f_consec and contar_consecutivos(cand) > m_consec: return False
     for g_set, mn, mx in regras_compiladas:
         qtd = len(cand_set & g_set)
-        if qtd < mn or qtd > mx:
-            return False
+        if qtd < mn or qtd > mx: return False
     if f_rep and ult_set:
         rep = len(cand_set & ult_set)
-        if not (r_rep[0] <= rep <= r_rep[1]):
-            return False
+        if not (r_rep[0] <= rep <= r_rep[1]): return False
     if f_coinc and hist_sets:
         for pass_set in hist_sets:
-            if len(cand_set & pass_set) > max_c:
-                return False
+            if len(cand_set & pass_set) > max_c: return False
     if f_freq:
         if not (r_q[0] <= len(cand_set & s_q) <= r_q[1]): return False
         if not (r_f[0] <= len(cand_set & s_f) <= r_f[1]): return False
         
     if f_quads and q_sets:
         contagens = [len(cand_set & s) for s in q_sets.values()]
-        if max(contagens) > max_q:
-            return False
-        if sum(1 for c in contagens if c > 0) < min_q:
-            return False
+        if max(contagens) > max_q: return False
+        if sum(1 for c in contagens if c > 0) < min_q: return False
             
     return True
 
@@ -650,7 +693,7 @@ def ler_arquivo_jogos_txt(conteudo_texto):
 # 8. INTERFACE PRINCIPAL
 # ==============================================================================
 st.title("🍀 Quina: Laboratório & Fechamentos")
-st.caption(f"Análise Ativa: Últimos {qtd_analise} Concursos • Matriz 8x10 • Top 40 Elliott • Linhas, Colunas, Moldura & Miolo.")
+st.caption(f"Análise Ativa: Últimos {qtd_analise} Concursos Reais • Matriz 8x10 • Top 40 Elliott • Linhas, Colunas, Moldura & Miolo.")
 
 tab_fechamento, tab_gerador, tab_conferir, tab_filtros, tab_hist, tab_volante = st.tabs([
     "🎯 Fechamentos & Funil",
@@ -705,13 +748,9 @@ with tab_fechamento:
         df_funil.columns = ["Dezena", "Score Funil", "Total Saídas", "Saídas Recentes", "Momentum", "Atraso"]
         st.dataframe(df_funil, use_container_width=True)
 
-    # ==========================================================================
-    # 3. ESCOLHA DAS DEZENAS, DESDOBRAMENTO & RESULTADOS DA 3ª SEÇÃO (QUINA)
-    # ==========================================================================
+    # 3. ESCOLHA DAS DEZENAS & RESULTADOS NA 3ª SEÇÃO
     st.divider()
     st.subheader("3. Escolha das Dezenas & Depuração Direta")
-    st.caption("Gere os jogos por garantia matemática ou depure diretamente aplicando os filtros ativos:")
-
     c_fech1, c_fech2 = st.columns([3, 2])
     with c_fech1:
         entrada_manual = st.text_input(
@@ -781,7 +820,7 @@ with tab_fechamento:
                     st.session_state.total_combinacoes_testadas = None
                     st.session_state.tipo_execucao_sec3 = "garantia_pura"
 
-    # EXIBIÇÃO DIRETA DOS RESULTADOS DA 3ª SEÇÃO COM CORES VIBRANTES
+    # EXIBIÇÃO DIRETA DOS RESULTADOS DA 3ª SEÇÃO
     if st.session_state.jogos_fechamento:
         qtd_total = len(st.session_state.jogos_fechamento)
         tipo_exec = st.session_state.get("tipo_execucao_sec3", "garantia_pura")
@@ -808,13 +847,9 @@ with tab_fechamento:
             if qtd_total > 100:
                 st.caption(f"Mostrando as primeiras 100 de {qtd_total} apostas geradas. Baixe o arquivo TXT para ver a relação completa.")
 
-    # ==========================================================================
     # 4. RE-DEPURAÇÃO ADICIONAL & UPLOAD EXTERNO
-    # ==========================================================================
     st.divider()
     st.subheader("4. Re-depuração Adicional & Upload de Jogos")
-    st.caption("Passe uma lista externa ou re-filtre os jogos gerados na 3ª seção caso queira aplicar novas regras:")
-
     origem_depuracao = st.radio(
         "Selecione a fonte para re-depurar:",
         [
@@ -1061,7 +1096,6 @@ with tab_filtros:
     # Quadrantes
     st.divider()
     st.markdown("### 📐 Filtro de Quadrantes 4x5 (Quina)")
-    st.caption("Controla a dispersão nos 4 setores de 20 dezenas da cartela para evitar acúmulos improváveis.")
     cq1, cq2, cq3 = st.columns(3)
     with cq1:
         st.checkbox("Ativar Filtro de Quadrantes", key="filtro_quads_ativo")
