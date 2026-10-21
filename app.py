@@ -57,8 +57,14 @@ def get_moldura_quina():
     return sorted(list(mold))
 
 @st.cache_data
+def get_miolo_quina():
+    """Centro interno da matriz 8x10 (Total: 48 dezenas)."""
+    mold_set = set(get_moldura_quina())
+    return [n for n in range(1, 81) if n not in mold_set]
+
+@st.cache_data
 def get_quadrantes_quina():
-    """Divisão da matriz 8x10 em 4 quadrantes de 20 dezenas (4 linhas x 5 colunas cada)."""
+    """4 quadrantes de 20 dezenas (4 linhas x 5 colunas cada)."""
     q1, q2, q3, q4 = [], [], [], []
     for r in range(8):
         for c in range(10):
@@ -76,7 +82,6 @@ def get_quadrantes_quina():
 
 @st.cache_data
 def get_diagonais_direita_quina():
-    """10 diagonais cilíndricas (+11 mod 10) de 8 dezenas cada."""
     return {
         f"Diag Direita {c+1:02d}": sorted([(r * 10) + ((c + r) % 10) + 1 for r in range(8)])
         for c in range(10)
@@ -84,7 +89,6 @@ def get_diagonais_direita_quina():
 
 @st.cache_data
 def get_diagonais_esquerda_quina():
-    """10 diagonais cilíndricas (+9 mod 10) de 8 dezenas cada."""
     return {
         f"Diag Esquerda {c+1:02d}": sorted([(r * 10) + ((c - r) % 10) + 1 for r in range(8)])
         for c in range(10)
@@ -96,7 +100,7 @@ def construir_todos_grupos():
         "Ímpares": [n for n in range(1, 81) if n % 2 != 0],
         "Primos": get_primos_quina(),
         "Moldura": get_moldura_quina(),
-        "Centro (Miolo)": [n for n in range(1, 81) if n not in get_moldura_quina()]
+        "Centro (Miolo)": get_miolo_quina()
     }
     for l in range(8):
         grupos[f"Linha {l+1}"] = list(range(l * 10 + 1, (l + 1) * 10 + 1))
@@ -255,8 +259,37 @@ def calcular_estatisticas_dinamicas(historico_fatia, grupos_base):
     }
 
 # ==============================================================================
-# 4. RENDERIZADOR DO HEATMAP VISUAL 8x10 (QUINA)
+# 4. RENDERIZADORES EM PRETO & HEATMAP 8x10
 # ==============================================================================
+def renderizar_card_aposta_preto(idx, jogo, extra=""):
+    """Renderiza a aposta com estilo preto puro, borda preta e fundo branco."""
+    jogo_str = "   ".join([f"{n:02d}" for n in jogo])
+    soma_val = sum(jogo)
+    extra_txt = f"{extra} | " if extra else ""
+    html = f"""
+    <div style="background-color: #ffffff; color: #000000; border: 2px solid #000000; border-radius: 8px; padding: 10px 16px; margin: 6px 0; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; box-shadow: 1px 2px 4px rgba(0,0,0,0.12);">
+        <span style="color: #000000; letter-spacing: 1px;">Aposta #{idx:02d}: <strong style="font-size: 17px; color: #000000;">{jogo_str}</strong></span>
+        <span style="color: #000000; font-size: 12px; background: #f0f0f0; border: 1px solid #000000; padding: 2px 8px; border-radius: 4px; font-weight: 700;">{extra_txt}Soma: {soma_val}</span>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+def renderizar_card_conferencia_preto(idx, jogo, acertos, tag):
+    """Renderiza a conferência com texto em preto e acertos destacados em tarja preta."""
+    jogo_html = " ".join([
+        f"<span style='background:#000000; color:#ffffff; padding:2px 6px; border-radius:4px; font-weight:bold; margin:0 2px;'>{n:02d}</span>"
+        if n in acertos else
+        f"<span style='color:#000000; padding:2px 4px; font-weight:bold; margin:0 2px;'>{n:02d}</span>"
+        for n in jogo
+    ])
+    html = f"""
+    <div style="background-color: #ffffff; color: #000000; border: 2px solid #000000; border-radius: 8px; padding: 8px 14px; margin: 5px 0; font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+        <span style="color: #000000;">Bilhete #{idx:02d}: {jogo_html}</span>
+        <span style="color: #000000; font-weight: 800; border: 1px solid #000000; padding: 3px 8px; border-radius: 4px; background: #e5e5e5;">{tag}</span>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
 def renderizar_heatmap_8x10(cnt_dezenas, titulo="Mapa de Calor da Quina (Matriz 8x10)"):
     val_min = min(cnt_dezenas.values()) if cnt_dezenas else 0
     val_max = max(cnt_dezenas.values()) if cnt_dezenas else 1
@@ -308,16 +341,8 @@ def renderizar_heatmap_8x10(cnt_dezenas, titulo="Mapa de Calor da Quina (Matriz 
             font-family: monospace;
             border: 1px solid rgba(255,255,255,0.12);
         }}
-        .heat-num {{
-            font-size: 13px;
-            font-weight: 800;
-            line-height: 1.1;
-        }}
-        .heat-freq {{
-            font-size: 9.5px;
-            font-weight: 600;
-            opacity: 0.88;
-        }}
+        .heat-num {{ font-size: 13px; font-weight: 800; line-height: 1.1; }}
+        .heat-freq {{ font-size: 9.5px; font-weight: 600; opacity: 0.88; }}
         .heat-legend {{
             display: flex;
             justify-content: center;
@@ -327,16 +352,8 @@ def renderizar_heatmap_8x10(cnt_dezenas, titulo="Mapa de Calor da Quina (Matriz 
             font-family: sans-serif;
             color: #94a3b8;
         }}
-        .legend-tag {{
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }}
-        .legend-box {{
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
-        }}
+        .legend-tag {{ display: flex; align-items: center; gap: 5px; }}
+        .legend-box {{ width: 12px; height: 12px; border-radius: 3px; }}
     </style>
     <div class="heat-wrapper">
         <div class="heat-title">{titulo}</div>
@@ -398,7 +415,7 @@ def sincronizar_filtros_com_historico(stats_atuais, top40):
     st.session_state.min_quadrantes = 3
 
     for k, v in stats_atuais["stats_grupos"].items():
-        eh_padrao = k in ["Pares", "Primos", "Moldura"]
+        eh_padrao = k in ["Pares", "Primos", "Moldura", "Centro (Miolo)"]
         mn, mx = int(v["min"]), int(v["max"])
         st.session_state[f"ativo_{k}"] = eh_padrao
         st.session_state[f"faixa_{k}"] = (mn, mx)
@@ -504,7 +521,6 @@ def validar_jogo(cand, cand_set, regras_compiladas, f_soma, r_soma, f_consec, m_
     return True
 
 def gerar_fechamento_guloso_quina(dezenas, garantia):
-    """Gera combinações de 5 dezenas com garantia de Quina, Quadra, Terno ou Duque."""
     nums = sorted(dezenas)
     if "Quina" in garantia:
         escolhidos = [sorted(list(c)) for c in combinations(nums, 5)]
@@ -564,15 +580,15 @@ def renderizar_volante_8x10(jogo, titulo=""):
     marcadas = set(jogo)
     grid_html = f"""
     <style>
-        .volante-box {{ background:#ffffff; border:2px solid #005c8a; border-radius:10px; padding:14px; width:fit-content; margin:8px auto; }}
+        .volante-box {{ background:#ffffff; border:2px solid #000000; border-radius:10px; padding:14px; width:fit-content; margin:8px auto; }}
         .volante-grid {{ display:grid; grid-template-columns:repeat(10, 36px); gap:5px; }}
-        .v-cell {{ width:36px; height:36px; border:1px solid #dcdcdc; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:12px; color:#555; background:#fafafa; font-weight:500; }}
-        .v-marcada {{ background:linear-gradient(135deg, #0284c7, #0369a1) !important; color:#ffffff !important; border:2px solid #075985 !important; font-weight:bold; }}
+        .v-cell {{ width:36px; height:36px; border:1px solid #000000; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:12px; color:#000000; background:#f9f9f9; font-weight:700; }}
+        .v-marcada {{ background:#000000 !important; color:#ffffff !important; border:2px solid #000000 !important; font-weight:bold; }}
     </style>
     <div class="volante-box">
     """
     if titulo:
-        grid_html += f"<p style='font-weight:700; font-size:15px; margin-bottom:10px; color:#0369a1; text-align:center;'>{titulo}</p>"
+        grid_html += f"<p style='font-weight:800; font-size:15px; margin-bottom:10px; color:#000000; text-align:center;'>{titulo}</p>"
     grid_html += '<div class="volante-grid">'
     for r in range(8):
         for c in range(10):
@@ -586,19 +602,21 @@ def renderizar_volante_8x10(jogo, titulo=""):
 # 8. INTERFACE PRINCIPAL
 # ==============================================================================
 st.title("🍀 Quina: Laboratório & Fechamentos")
-st.caption(f"Análise Ativa: Últimos {qtd_analise} Concursos • Matriz 8x10 (80 Dezenas) • Top 40 Elliott • Heatmap & Quadrantes.")
+st.caption(f"Análise Ativa: Últimos {qtd_analise} Concursos • Matriz 8x10 • Top 40 Elliott • Linhas, Colunas, Moldura & Miolo.")
 
 tab_fechamento, tab_gerador, tab_conferir, tab_filtros, tab_hist, tab_volante = st.tabs([
     "🎯 Fechamentos & Funil",
     "🚀 Gerador de Apostas",
     "🎟️ Conferir Jogos (TXT)",
     "⚙️ Filtros & Estatísticas",
-    f"📜 Concursos ({qtd_analise}), Heatmap & Quadrantes",
+    f"📜 Concursos ({qtd_analise}), Linhas, Colunas & Heatmap",
     "🗺️ Volante Visual 8x10"
 ])
 
 hist_sets = [set(j) for j in historico_ativo]
 ult_set = set(historico_ativo[-1]) if historico_ativo else set()
+linhas_chaves = [f"Linha {i}" for i in range(1, 9)]
+colunas_chaves = [f"Coluna {i}" for i in range(1, 11)]
 diag_dir = [f"Diag Direita {i:02d}" for i in range(1, 11)]
 diag_esq = [f"Diag Esquerda {i:02d}" for i in range(1, 11)]
 
@@ -706,7 +724,7 @@ with tab_fechamento:
                     st.session_state.tipo_execucao_sec3 = "filtros_diretos"
             else:
                 if len(dezenas_digitadas) > 20 and ("Quadra" in gar or "Terno" in gar):
-                    st.warning("⚠️ Com muitas dezenas, o cálculo exato de matriz gulosa pode demorar alguns segundos.")
+                    st.warning("⚠️ Com muitas dezenas, o cálculo exato pode demorar alguns segundos.")
                 with st.spinner("Processando fechamento matemático da Quina..."):
                     j_fech, cob = gerar_fechamento_guloso_quina(dezenas_digitadas, gar)
                     st.session_state.jogos_fechamento = j_fech
@@ -715,15 +733,15 @@ with tab_fechamento:
                     st.session_state.total_combinacoes_testadas = None
                     st.session_state.tipo_execucao_sec3 = "garantia_pura"
 
-    # EXIBIÇÃO DIRETA DOS RESULTADOS DA 3ª SEÇÃO
+    # EXIBIÇÃO DIRETA DOS RESULTADOS DA 3ª SEÇÃO EM PRETO
     if st.session_state.jogos_fechamento:
         qtd_total = len(st.session_state.jogos_fechamento)
         tipo_exec = st.session_state.get("tipo_execucao_sec3", "garantia_pura")
         
-        st.markdown("#### 📊 Resultado da 3ª Seção:")
+        st.markdown("#### 📊 Resultado da 3ª Seção (Quina):")
         if tipo_exec == "filtros_diretos":
             testados = st.session_state.get('total_combinacoes_testadas', qtd_total)
-            st.success(f"🎯 **Depuração Concluída na 3ª Seção:** Das **{testados:,}** combinações testadas, **{qtd_total:,} jogos atenderam 100% dos filtros ativos**.")
+            st.success(f"🎯 **Depuração Concluída na 3ª Seção:** Das **{testados:,}** combinações geradas, **{qtd_total:,} jogos atenderam 100% dos filtros ativos**.")
         else:
             st.success(f"📦 **Desdobramento Concluído na 3ª Seção:** **{qtd_total:,} apostas geradas** com garantia de **{st.session_state.get('taxa_cobertura', 100):.1f}%**.")
 
@@ -736,9 +754,9 @@ with tab_fechamento:
             use_container_width=True
         )
 
-        with st.expander(f"Ver Lista de Apostas Geradas na 3ª Seção ({qtd_total} jogos)", expanded=True):
+        with st.expander(f"Ver Lista de Apostas em Preto ({qtd_total} jogos)", expanded=True):
             for i, j in enumerate(st.session_state.jogos_fechamento[:100]):
-                st.code(f"Aposta #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])} | Soma: {sum(j)}")
+                renderizar_card_aposta_preto(i + 1, j)
             if qtd_total > 100:
                 st.caption(f"Mostrando as primeiras 100 de {qtd_total} apostas geradas. Baixe o arquivo TXT para ver a relação completa.")
 
@@ -812,7 +830,7 @@ with tab_fechamento:
                 st.error("Nenhum jogo passou pelos filtros atuais.")
 
         if st.session_state.jogos_fechamento_filtrados:
-            st.write(f"### 📋 Jogos Re-depurados ({len(st.session_state.jogos_fechamento_filtrados)} bilhetes):")
+            st.write(f"### 📋 Jogos Re-depurados em Preto ({len(st.session_state.jogos_fechamento_filtrados)} bilhetes):")
             st.download_button(
                 "📥 Baixar Lista Re-depurada (.TXT)",
                 data=converter_para_txt(st.session_state.jogos_fechamento_filtrados),
@@ -822,10 +840,10 @@ with tab_fechamento:
                 use_container_width=True
             )
             for i, j in enumerate(st.session_state.jogos_fechamento_filtrados[:100]):
-                st.code(f"Aposta #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])} | Soma: {sum(j)}")
+                renderizar_card_aposta_preto(i + 1, j)
 
 # ==============================================================================
-# ABA: GERADOR DE APOSTAS (5 DEZENAS)
+# ABA: GERADOR DE APOSTAS (5 DEZENAS EM PRETO)
 # ==============================================================================
 with tab_gerador:
     st.subheader("Gerar Combinações Validadas da Quina (5 Dezenas)")
@@ -868,10 +886,10 @@ with tab_gerador:
             use_container_width=True
         )
         for i, j in enumerate(st.session_state.jogos_aleatorios):
-            st.code(f"Jogo #{i+1:02d}: {'  '.join([f'{n:02d}' for n in j])} | Soma: {sum(j)}")
+            renderizar_card_aposta_preto(i + 1, j)
 
 # ==============================================================================
-# ABA: CONFERIR JOGOS (ARQUIVO .TXT - QUINA)
+# ABA: CONFERIR JOGOS (ARQUIVO .TXT - QUINA EM PRETO)
 # ==============================================================================
 with tab_conferir:
     st.subheader("Conferência Oficial da Quina (.TXT)")
@@ -956,11 +974,10 @@ with tab_conferir:
             elif qtd == 3: tag = "🥉 TERNO!"
             elif qtd == 2: tag = "🥈 DUQUE!"
 
-            jogo_str = " ".join([f"[{n:02d}]" if n in item["acertos"] else f"{n:02d}" for n in item["jogo"]])
-            st.write(f"Bilhete #{idx+1:02d}: {jogo_str} — **{tag}**")
+            renderizar_card_conferencia_preto(idx + 1, item["jogo"], item["acertos"], tag)
 
 # ==============================================================================
-# ABA: FILTROS & ESTATÍSTICAS (QUINA)
+# ABA: FILTROS & ESTATÍSTICAS (QUINA: LINHAS, COLUNAS, MOLDURA E MIOLO)
 # ==============================================================================
 with tab_filtros:
     st.subheader(f"Filtros Calibrados nos Últimos {qtd_analise} Concursos (Quina)")
@@ -993,6 +1010,7 @@ with tab_filtros:
             st.slider("Top Quentes:", 0, 5, key="faixa_quentes")
             st.slider("Mais Atrasadas:", 0, 5, key="faixa_frias")
 
+    # Quadrantes
     st.divider()
     st.markdown("### 📐 Filtro de Quadrantes 4x5 (Quina)")
     st.caption("Controla a dispersão nos 4 setores de 20 dezenas da cartela para evitar acúmulos improváveis.")
@@ -1006,27 +1024,77 @@ with tab_filtros:
         if st.session_state.filtro_quads_ativo:
             st.slider("Mínimo de Quadrantes Presentes:", 1, 4, key="min_quadrantes", help="Exige que o jogo ocupe pelo menos X quadrantes distintos.")
 
+    # Moldura, Miolo, Pares, Ímpares e Primos
     st.divider()
-    st.write("Padrões da Matriz (Quina):")
-    for padrao in ["Pares", "Primos", "Moldura", "Centro (Miolo)"]:
+    st.markdown("### 🖼️ Moldura (32 dezenas) & Miolo (48 dezenas)")
+    for padrao in ["Moldura", "Centro (Miolo)", "Pares", "Primos"]:
         s_g = stats["stats_grupos"][padrao]
         chk, sl = st.columns([2, 3])
         with chk:
-            st.checkbox(f"{padrao} (Min: {s_g['min']} | Max: {s_g['max']})", key=f"ativo_{padrao}")
+            st.checkbox(f"{padrao} (Min: {s_g['min']} | Max: {s_g['max']} | Saídas: {s_g['total_saidas']})", key=f"ativo_{padrao}")
         with sl:
             if st.session_state.get(f"ativo_{padrao}", False):
                 st.slider(f"Faixa {padrao}", 0, 5, key=f"faixa_{padrao}")
 
+    # 8 Linhas Individuais
+    st.divider()
+    st.markdown("### 📏 Filtros Individuais das 8 Linhas (Quina)")
+    st.caption("Configure individualmente o piso e o teto de dezenas aceitas em cada uma das 8 linhas:")
+    cl_btn1, cl_btn2 = st.columns(2)
+    with cl_btn1:
+        if st.button("Ativar Todas as 8 Linhas", use_container_width=True):
+            for k in linhas_chaves: st.session_state[f"ativo_{k}"] = True
+            st.rerun()
+    with cl_btn2:
+        if st.button("Desativar Todas as Linhas", use_container_width=True):
+            for k in linhas_chaves: st.session_state[f"ativo_{k}"] = False
+            st.rerun()
+
+    with st.expander("Ver e Calibrar Linha por Linha (1 a 8)", expanded=True):
+        for k in linhas_chaves:
+            s_l = stats["stats_grupos"][k]
+            chk, sl = st.columns([2, 3])
+            with chk:
+                st.checkbox(f"{k} (Saídas: {s_l['total_saidas']} | Min: {s_l['min']} | Max: {s_l['max']})", key=f"ativo_{k}")
+            with sl:
+                if st.session_state.get(f"ativo_{k}", False):
+                    st.slider(f"Faixa {k}", 0, 5, key=f"faixa_{k}", label_visibility="collapsed")
+
+    # 10 Colunas Individuais
+    st.divider()
+    st.markdown("### 📐 Filtros Individuais das 10 Colunas (Quina)")
+    st.caption("Configure individualmente o piso e o teto de dezenas aceitas em cada uma das 10 colunas:")
+    cc_btn1, cc_btn2 = st.columns(2)
+    with cc_btn1:
+        if st.button("Ativar Todas as 10 Colunas", use_container_width=True):
+            for k in colunas_chaves: st.session_state[f"ativo_{k}"] = True
+            st.rerun()
+    with cc_btn2:
+        if st.button("Desativar Todas as Colunas", use_container_width=True):
+            for k in colunas_chaves: st.session_state[f"ativo_{k}"] = False
+            st.rerun()
+
+    with st.expander("Ver e Calibrar Coluna por Coluna (1 a 10)", expanded=True):
+        for k in colunas_chaves:
+            s_c = stats["stats_grupos"][k]
+            chk, sl = st.columns([2, 3])
+            with chk:
+                st.checkbox(f"{k} (Saídas: {s_c['total_saidas']} | Min: {s_c['min']} | Max: {s_c['max']})", key=f"ativo_{k}")
+            with sl:
+                if st.session_state.get(f"ativo_{k}", False):
+                    st.slider(f"Faixa {k}", 0, 5, key=f"faixa_{k}", label_visibility="collapsed")
+
+    # 20 Diagonais Cilíndricas
     st.divider()
     st.write("20 Diagonais Cilíndricas (Matriz 8x10):")
-    c_btn1, c_btn2 = st.columns(2)
-    with c_btn1:
+    cd_btn1, cd_btn2 = st.columns(2)
+    with cd_btn1:
         if st.button("Ativar 20 Diagonais", use_container_width=True):
             for i in range(1, 11):
                 st.session_state[f"ativo_Diag Direita {i:02d}"] = True
                 st.session_state[f"ativo_Diag Esquerda {i:02d}"] = True
             st.rerun()
-    with c_btn2:
+    with cd_btn2:
         if st.button("Desativar Todas as Diagonais", use_container_width=True):
             for i in range(1, 11):
                 st.session_state[f"ativo_Diag Direita {i:02d}"] = False
@@ -1054,7 +1122,7 @@ with tab_filtros:
                     st.slider(f"Faixa {k}", 0, 5, key=f"faixa_{k}", label_visibility="collapsed")
 
 # ==============================================================================
-# ABA: HISTÓRICO, HEATMAP, QUADRANTES & DIAGONAIS
+# ABA: HISTÓRICO, LINHAS, COLUNAS, MOLDURA/MIOLO & HEATMAP
 # ==============================================================================
 with tab_hist:
     st.subheader("🔥 Mapa de Calor Térmico da Quina (Heatmap 8x10)")
@@ -1069,13 +1137,63 @@ with tab_hist:
             {"Concurso": f"#{len(historico_ativo)-idx:02d}", "Dezenas": " - ".join([f"{n:02d}" for n in s]), "Soma": sum(s)}
             for idx, s in enumerate(reversed(historico_ativo))
         ]
-        st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True, height=350)
+        st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True, height=300)
     with c_h2:
         top_10 = [(d, stats["cnt_dezenas"][d]) for d in stats["ordenados_freq"][:10]]
         st.write("**Top 10 Quentes:** " + ", ".join([f"{d:02d} ({qtd}x)" for d, qtd in top_10]))
         bot_10 = sorted(stats["cnt_dezenas"].items(), key=lambda x: x[1])[:10]
         st.write("**Top 10 Frias:** " + ", ".join([f"{d:02d} ({qtd}x)" for d, qtd in bot_10]))
 
+    # Painel Estatístico Moldura vs. Miolo
+    st.divider()
+    st.subheader("🖼️ Desempenho Estatístico: Moldura (32 dezenas) vs. Miolo (48 dezenas)")
+    col_mold, col_miolo = st.columns(2)
+    s_mold = stats["stats_grupos"]["Moldura"]
+    s_miolo = stats["stats_grupos"]["Centro (Miolo)"]
+    with col_mold:
+        st.metric("Moldura (Perímetro Externo)", f"{s_mold['total_saidas']} saídas", f"Média: {s_mold['media']:.2f} por sorteio")
+        st.caption(f"Variação no período: Mínimo {s_mold['min']} | Máximo {s_mold['max']} dezenas.")
+    with col_miolo:
+        st.metric("Miolo (Centro Interno)", f"{s_miolo['total_saidas']} saídas", f"Média: {s_miolo['media']:.2f} por sorteio")
+        st.caption(f"Variação no período: Mínimo {s_miolo['min']} | Máximo {s_miolo['max']} dezenas.")
+
+    # Tabela Estatística das 8 Linhas
+    st.divider()
+    st.subheader("📏 Estatísticas Individuais das 8 Linhas (Quina)")
+    dados_linhas = []
+    for k in linhas_chaves:
+        info = stats["stats_grupos"][k]
+        dados_linhas.append({
+            "Linha": k,
+            "Total Saídas": info["total_saidas"],
+            "Média por Jogo": f"{info['media']:.2f}",
+            "Mín": info["min"],
+            "Máx": info["max"],
+            "Dezenas": " ".join([f"{n:02d}" for n in info["dezenas"]]),
+            "Filtro Ativo": "Sim" if st.session_state.get(f"ativo_{k}", False) else "Não"
+        })
+    df_linhas = pd.DataFrame(dados_linhas).sort_values(by="Total Saídas", ascending=False)
+    st.dataframe(df_linhas, use_container_width=True, height=320)
+
+    # Tabela Estatística das 10 Colunas
+    st.divider()
+    st.subheader("📐 Estatísticas Individuais das 10 Colunas (Quina)")
+    dados_colunas = []
+    for k in colunas_chaves:
+        info = stats["stats_grupos"][k]
+        dados_colunas.append({
+            "Coluna": k,
+            "Total Saídas": info["total_saidas"],
+            "Média por Jogo": f"{info['media']:.2f}",
+            "Mín": info["min"],
+            "Máx": info["max"],
+            "Dezenas": " ".join([f"{n:02d}" for n in info["dezenas"]]),
+            "Filtro Ativo": "Sim" if st.session_state.get(f"ativo_{k}", False) else "Não"
+        })
+    df_colunas = pd.DataFrame(dados_colunas).sort_values(by="Total Saídas", ascending=False)
+    st.dataframe(df_colunas, use_container_width=True, height=360)
+
+    # 4 Quadrantes e 20 Diagonais
     st.divider()
     st.subheader("Mapeamento dos 4 Quadrantes (4x5 - 20 Dezenas Cada)")
     col_q1, col_q2, col_q3, col_q4 = st.columns(4)
@@ -1104,7 +1222,7 @@ with tab_hist:
     st.dataframe(df_diags, use_container_width=True, height=400)
 
 # ==============================================================================
-# ABA: VOLANTE VISUAL (8x10)
+# ABA: VOLANTE VISUAL (8x10 EM PRETO E BRANCO)
 # ==============================================================================
 with tab_volante:
     st.subheader("Visualizador da Cartela Oficial da Quina (8x10)")
