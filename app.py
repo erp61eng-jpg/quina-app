@@ -259,33 +259,61 @@ def calcular_estatisticas_dinamicas(historico_fatia, grupos_base):
     }
 
 # ==============================================================================
-# 4. RENDERIZADORES EM PRETO & HEATMAP 8x10
+# 4. RENDERIZADORES COLORIDOS (QUINA) & HEATMAP 8x10
 # ==============================================================================
-def renderizar_card_aposta_preto(idx, jogo, extra=""):
-    """Renderiza a aposta com estilo preto puro, borda preta e fundo branco."""
-    jogo_str = "   ".join([f"{n:02d}" for n in jogo])
+def renderizar_card_aposta_colorido(idx, jogo, extra=""):
+    """Renderiza a aposta com dezenas em globos de loteria azuis e badges de identificação."""
+    dezenas_html = "".join([
+        f"<span style='display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; background:linear-gradient(135deg, #0284c7, #0369a1); color:#ffffff; font-weight:800; font-size:14px; border-radius:50%; margin:0 3px; box-shadow:0 2px 5px rgba(2,132,199,0.35); font-family:monospace;'>{n:02d}</span>"
+        for n in jogo
+    ])
     soma_val = sum(jogo)
-    extra_txt = f"{extra} | " if extra else ""
+    extra_txt = f"<span style='color:#0369a1; font-weight:700; margin-right:8px;'>{extra}</span>" if extra else ""
     html = f"""
-    <div style="background-color: #ffffff; color: #000000; border: 2px solid #000000; border-radius: 8px; padding: 10px 16px; margin: 6px 0; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; box-shadow: 1px 2px 4px rgba(0,0,0,0.12);">
-        <span style="color: #000000; letter-spacing: 1px;">Aposta #{idx:02d}: <strong style="font-size: 17px; color: #000000;">{jogo_str}</strong></span>
-        <span style="color: #000000; font-size: 12px; background: #f0f0f0; border: 1px solid #000000; padding: 2px 8px; border-radius: 4px; font-weight: 700;">{extra_txt}Soma: {soma_val}</span>
+    <div style="background:#ffffff; border:1px solid #bae6fd; border-left:5px solid #0284c7; border-radius:10px; padding:10px 16px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-weight:800; color:#0f172a; font-size:14px; font-family:sans-serif;">Aposta #{idx:02d}</span>
+            <div>{dezenas_html}</div>
+        </div>
+        <div style="display:flex; align-items:center;">
+            {extra_txt}
+            <span style="background:#e0f2fe; color:#0369a1; padding:4px 10px; border-radius:12px; font-size:12px; font-weight:700; font-family:sans-serif;">Soma: {soma_val}</span>
+        </div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
 
-def renderizar_card_conferencia_preto(idx, jogo, acertos, tag):
-    """Renderiza a conferência com texto em preto e acertos destacados em tarja preta."""
-    jogo_html = " ".join([
-        f"<span style='background:#000000; color:#ffffff; padding:2px 6px; border-radius:4px; font-weight:bold; margin:0 2px;'>{n:02d}</span>"
-        if n in acertos else
-        f"<span style='color:#000000; padding:2px 4px; font-weight:bold; margin:0 2px;'>{n:02d}</span>"
-        for n in jogo
-    ])
+def renderizar_card_conferencia_colorido(idx, jogo, acertos, tag, qtd):
+    """Renderiza a conferência com destaque em verde esmeralda para acertos e badges por faixa de premiação."""
+    dezenas_html = ""
+    for n in jogo:
+        if n in acertos:
+            dezenas_html += f"<span style='display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; background:linear-gradient(135deg, #16a34a, #15803d); color:#ffffff; font-weight:800; font-size:14px; border-radius:50%; margin:0 3px; box-shadow:0 2px 6px rgba(22,163,74,0.4); font-family:monospace;'>{n:02d}</span>"
+        else:
+            dezenas_html += f"<span style='display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; background:#f1f5f9; color:#475569; font-weight:700; font-size:14px; border-radius:50%; margin:0 3px; font-family:monospace; border:1px solid #cbd5e1;'>{n:02d}</span>"
+    
+    cor_badge = "#64748b"
+    bg_badge = "#f1f5f9"
+    if qtd == 5:
+        cor_badge = "#b45309"
+        bg_badge = "#fef3c7"
+    elif qtd == 4:
+        cor_badge = "#dc2626"
+        bg_badge = "#fee2e2"
+    elif qtd == 3:
+        cor_badge = "#16a34a"
+        bg_badge = "#dcfce7"
+    elif qtd == 2:
+        cor_badge = "#0284c7"
+        bg_badge = "#e0f2fe"
+
     html = f"""
-    <div style="background-color: #ffffff; color: #000000; border: 2px solid #000000; border-radius: 8px; padding: 8px 14px; margin: 5px 0; font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
-        <span style="color: #000000;">Bilhete #{idx:02d}: {jogo_html}</span>
-        <span style="color: #000000; font-weight: 800; border: 1px solid #000000; padding: 3px 8px; border-radius: 4px; background: #e5e5e5;">{tag}</span>
+    <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid {cor_badge}; border-radius:10px; padding:10px 16px; margin:8px 0; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-weight:700; color:#334155; font-size:14px; font-family:sans-serif;">Bilhete #{idx:02d}</span>
+            <div>{dezenas_html}</div>
+        </div>
+        <span style="background:{bg_badge}; color:{cor_badge}; padding:5px 12px; border-radius:14px; font-size:13px; font-weight:800; font-family:sans-serif;">{tag}</span>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
@@ -300,7 +328,7 @@ def renderizar_heatmap_8x10(cnt_dezenas, titulo="Mapa de Calor da Quina (Matriz 
         if ratio <= 0.25:
             return "#1e3a8a", "#93c5fd"
         elif ratio <= 0.50:
-            return "#0369a1", "#e0f2fe"
+            return "#0284c7", "#e0f2fe"
         elif ratio <= 0.75:
             return "#d97706", "#ffffff"
         else:
@@ -376,7 +404,7 @@ def renderizar_heatmap_8x10(cnt_dezenas, titulo="Mapa de Calor da Quina (Matriz 
         </div>
         <div class="heat-legend">
             <div class="legend-tag"><div class="legend-box" style="background:#1e3a8a;"></div> Frias ({val_min}x)</div>
-            <div class="legend-tag"><div class="legend-box" style="background:#0369a1;"></div> Moderadas</div>
+            <div class="legend-tag"><div class="legend-box" style="background:#0284c7;"></div> Moderadas</div>
             <div class="legend-tag"><div class="legend-box" style="background:#d97706;"></div> Aquecidas</div>
             <div class="legend-tag"><div class="legend-box" style="background:#b91c1c;"></div> Super Quentes ({val_max}x)</div>
         </div>
@@ -580,15 +608,15 @@ def renderizar_volante_8x10(jogo, titulo=""):
     marcadas = set(jogo)
     grid_html = f"""
     <style>
-        .volante-box {{ background:#ffffff; border:2px solid #000000; border-radius:10px; padding:14px; width:fit-content; margin:8px auto; }}
-        .volante-grid {{ display:grid; grid-template-columns:repeat(10, 36px); gap:5px; }}
-        .v-cell {{ width:36px; height:36px; border:1px solid #000000; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:12px; color:#000000; background:#f9f9f9; font-weight:700; }}
-        .v-marcada {{ background:#000000 !important; color:#ffffff !important; border:2px solid #000000 !important; font-weight:bold; }}
+        .volante-box {{ background:#ffffff; border:2px solid #0284c7; border-radius:14px; padding:16px; width:fit-content; margin:12px auto; box-shadow:0 4px 16px rgba(2,132,199,0.15); }}
+        .volante-grid {{ display:grid; grid-template-columns:repeat(10, 38px); gap:6px; }}
+        .v-cell {{ width:38px; height:38px; border:1px solid #cbd5e1; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px; color:#475569; background:#f8fafc; font-weight:600; transition:all 0.2s; }}
+        .v-marcada {{ background:linear-gradient(135deg, #0284c7, #0369a1) !important; color:#ffffff !important; border:2px solid #075985 !important; font-weight:800 !important; box-shadow:0 2px 8px rgba(2,132,199,0.45); transform:scale(1.05); }}
     </style>
     <div class="volante-box">
     """
     if titulo:
-        grid_html += f"<p style='font-weight:800; font-size:15px; margin-bottom:10px; color:#000000; text-align:center;'>{titulo}</p>"
+        grid_html += f"<p style='font-weight:800; font-size:16px; margin-bottom:12px; color:#0369a1; text-align:center; letter-spacing:0.5px;'>{titulo}</p>"
     grid_html += '<div class="volante-grid">'
     for r in range(8):
         for c in range(10):
@@ -733,7 +761,7 @@ with tab_fechamento:
                     st.session_state.total_combinacoes_testadas = None
                     st.session_state.tipo_execucao_sec3 = "garantia_pura"
 
-    # EXIBIÇÃO DIRETA DOS RESULTADOS DA 3ª SEÇÃO EM PRETO
+    # EXIBIÇÃO DIRETA DOS RESULTADOS DA 3ª SEÇÃO COM CORES VIBRANTES
     if st.session_state.jogos_fechamento:
         qtd_total = len(st.session_state.jogos_fechamento)
         tipo_exec = st.session_state.get("tipo_execucao_sec3", "garantia_pura")
@@ -741,7 +769,7 @@ with tab_fechamento:
         st.markdown("#### 📊 Resultado da 3ª Seção (Quina):")
         if tipo_exec == "filtros_diretos":
             testados = st.session_state.get('total_combinacoes_testadas', qtd_total)
-            st.success(f"🎯 **Depuração Concluída na 3ª Seção:** Das **{testados:,}** combinações geradas, **{qtd_total:,} jogos atenderam 100% dos filtros ativos**.")
+            st.success(f"🎯 **Depuração Concluída na 3ª Seção:** Das **{testados:,}** combinações testadas, **{qtd_total:,} jogos atenderam 100% dos filtros ativos**.")
         else:
             st.success(f"📦 **Desdobramento Concluído na 3ª Seção:** **{qtd_total:,} apostas geradas** com garantia de **{st.session_state.get('taxa_cobertura', 100):.1f}%**.")
 
@@ -754,9 +782,9 @@ with tab_fechamento:
             use_container_width=True
         )
 
-        with st.expander(f"Ver Lista de Apostas em Preto ({qtd_total} jogos)", expanded=True):
+        with st.expander(f"Ver Lista de Apostas da Quina ({qtd_total} jogos)", expanded=True):
             for i, j in enumerate(st.session_state.jogos_fechamento[:100]):
-                renderizar_card_aposta_preto(i + 1, j)
+                renderizar_card_aposta_colorido(i + 1, j)
             if qtd_total > 100:
                 st.caption(f"Mostrando as primeiras 100 de {qtd_total} apostas geradas. Baixe o arquivo TXT para ver a relação completa.")
 
@@ -830,7 +858,7 @@ with tab_fechamento:
                 st.error("Nenhum jogo passou pelos filtros atuais.")
 
         if st.session_state.jogos_fechamento_filtrados:
-            st.write(f"### 📋 Jogos Re-depurados em Preto ({len(st.session_state.jogos_fechamento_filtrados)} bilhetes):")
+            st.write(f"### 📋 Jogos Re-depurados ({len(st.session_state.jogos_fechamento_filtrados)} bilhetes):")
             st.download_button(
                 "📥 Baixar Lista Re-depurada (.TXT)",
                 data=converter_para_txt(st.session_state.jogos_fechamento_filtrados),
@@ -840,10 +868,10 @@ with tab_fechamento:
                 use_container_width=True
             )
             for i, j in enumerate(st.session_state.jogos_fechamento_filtrados[:100]):
-                renderizar_card_aposta_preto(i + 1, j)
+                renderizar_card_aposta_colorido(i + 1, j)
 
 # ==============================================================================
-# ABA: GERADOR DE APOSTAS (5 DEZENAS EM PRETO)
+# ABA: GERADOR DE APOSTAS (5 DEZENAS)
 # ==============================================================================
 with tab_gerador:
     st.subheader("Gerar Combinações Validadas da Quina (5 Dezenas)")
@@ -886,10 +914,10 @@ with tab_gerador:
             use_container_width=True
         )
         for i, j in enumerate(st.session_state.jogos_aleatorios):
-            renderizar_card_aposta_preto(i + 1, j)
+            renderizar_card_aposta_colorido(i + 1, j)
 
 # ==============================================================================
-# ABA: CONFERIR JOGOS (ARQUIVO .TXT - QUINA EM PRETO)
+# ABA: CONFERIR JOGOS (ARQUIVO .TXT - QUINA)
 # ==============================================================================
 with tab_conferir:
     st.subheader("Conferência Oficial da Quina (.TXT)")
@@ -974,10 +1002,10 @@ with tab_conferir:
             elif qtd == 3: tag = "🥉 TERNO!"
             elif qtd == 2: tag = "🥈 DUQUE!"
 
-            renderizar_card_conferencia_preto(idx + 1, item["jogo"], item["acertos"], tag)
+            renderizar_card_conferencia_colorido(idx + 1, item["jogo"], item["acertos"], tag, qtd)
 
 # ==============================================================================
-# ABA: FILTROS & ESTATÍSTICAS (QUINA: LINHAS, COLUNAS, MOLDURA E MIOLO)
+# ABA: FILTROS & ESTATÍSTICAS (SISTEMA PADRONIZADO: LINHAS, COLUNAS E DIAGONAIS)
 # ==============================================================================
 with tab_filtros:
     st.subheader(f"Filtros Calibrados nos Últimos {qtd_analise} Concursos (Quina)")
@@ -1026,23 +1054,22 @@ with tab_filtros:
 
     # Moldura, Miolo, Pares, Ímpares e Primos
     st.divider()
-    st.markdown("### 🖼️ Moldura (32 dezenas) & Miolo (48 dezenas)")
-    for padrao in ["Moldura", "Centro (Miolo)", "Pares", "Primos"]:
+    st.write("Padrões da Matriz (Quina):")
+    for padrao in ["Moldura", "Centro (Miolo)", "Pares", "Ímpares", "Primos"]:
         s_g = stats["stats_grupos"][padrao]
         chk, sl = st.columns([2, 3])
         with chk:
-            st.checkbox(f"{padrao} (Min: {s_g['min']} | Max: {s_g['max']} | Saídas: {s_g['total_saidas']})", key=f"ativo_{padrao}")
+            st.checkbox(f"{padrao} (Saídas: {s_g['total_saidas']})", key=f"ativo_{padrao}")
         with sl:
             if st.session_state.get(f"ativo_{padrao}", False):
-                st.slider(f"Faixa {padrao}", 0, 5, key=f"faixa_{padrao}")
+                st.slider(f"Faixa {padrao}", 0, 5, key=f"faixa_{padrao}", label_visibility="collapsed")
 
-    # 8 Linhas Individuais
+    # 8 Linhas da Matriz (Mesmo Sistema das Diagonais)
     st.divider()
-    st.markdown("### 📏 Filtros Individuais das 8 Linhas (Quina)")
-    st.caption("Configure individualmente o piso e o teto de dezenas aceitas em cada uma das 8 linhas:")
+    st.write("8 Linhas (Matriz 8x10):")
     cl_btn1, cl_btn2 = st.columns(2)
     with cl_btn1:
-        if st.button("Ativar Todas as 8 Linhas", use_container_width=True):
+        if st.button("Ativar 8 Linhas", use_container_width=True):
             for k in linhas_chaves: st.session_state[f"ativo_{k}"] = True
             st.rerun()
     with cl_btn2:
@@ -1050,23 +1077,22 @@ with tab_filtros:
             for k in linhas_chaves: st.session_state[f"ativo_{k}"] = False
             st.rerun()
 
-    with st.expander("Ver e Calibrar Linha por Linha (1 a 8)", expanded=True):
+    with st.expander("8 Linhas da Matriz"):
         for k in linhas_chaves:
-            s_l = stats["stats_grupos"][k]
+            s_d = stats["stats_grupos"][k]
             chk, sl = st.columns([2, 3])
             with chk:
-                st.checkbox(f"{k} (Saídas: {s_l['total_saidas']} | Min: {s_l['min']} | Max: {s_l['max']})", key=f"ativo_{k}")
+                st.checkbox(f"{k} (Saídas: {s_d['total_saidas']})", key=f"ativo_{k}")
             with sl:
                 if st.session_state.get(f"ativo_{k}", False):
                     st.slider(f"Faixa {k}", 0, 5, key=f"faixa_{k}", label_visibility="collapsed")
 
-    # 10 Colunas Individuais
+    # 10 Colunas da Matriz (Mesmo Sistema das Diagonais)
     st.divider()
-    st.markdown("### 📐 Filtros Individuais das 10 Colunas (Quina)")
-    st.caption("Configure individualmente o piso e o teto de dezenas aceitas em cada uma das 10 colunas:")
+    st.write("10 Colunas (Matriz 8x10):")
     cc_btn1, cc_btn2 = st.columns(2)
     with cc_btn1:
-        if st.button("Ativar Todas as 10 Colunas", use_container_width=True):
+        if st.button("Ativar 10 Colunas", use_container_width=True):
             for k in colunas_chaves: st.session_state[f"ativo_{k}"] = True
             st.rerun()
     with cc_btn2:
@@ -1074,17 +1100,17 @@ with tab_filtros:
             for k in colunas_chaves: st.session_state[f"ativo_{k}"] = False
             st.rerun()
 
-    with st.expander("Ver e Calibrar Coluna por Coluna (1 a 10)", expanded=True):
+    with st.expander("10 Colunas da Matriz"):
         for k in colunas_chaves:
-            s_c = stats["stats_grupos"][k]
+            s_d = stats["stats_grupos"][k]
             chk, sl = st.columns([2, 3])
             with chk:
-                st.checkbox(f"{k} (Saídas: {s_c['total_saidas']} | Min: {s_c['min']} | Max: {s_c['max']})", key=f"ativo_{k}")
+                st.checkbox(f"{k} (Saídas: {s_d['total_saidas']})", key=f"ativo_{k}")
             with sl:
                 if st.session_state.get(f"ativo_{k}", False):
                     st.slider(f"Faixa {k}", 0, 5, key=f"faixa_{k}", label_visibility="collapsed")
 
-    # 20 Diagonais Cilíndricas
+    # 20 Diagonais Cilíndricas (Mesmo Sistema)
     st.divider()
     st.write("20 Diagonais Cilíndricas (Matriz 8x10):")
     cd_btn1, cd_btn2 = st.columns(2)
@@ -1144,20 +1170,20 @@ with tab_hist:
         bot_10 = sorted(stats["cnt_dezenas"].items(), key=lambda x: x[1])[:10]
         st.write("**Top 10 Frias:** " + ", ".join([f"{d:02d} ({qtd}x)" for d, qtd in bot_10]))
 
-    # Painel Estatístico Moldura vs. Miolo
+    # Painel Moldura vs. Miolo
     st.divider()
-    st.subheader("🖼️ Desempenho Estatístico: Moldura (32 dezenas) vs. Miolo (48 dezenas)")
+    st.subheader("🖼️ Desempenho: Moldura (32 dezenas) vs. Miolo (48 dezenas)")
     col_mold, col_miolo = st.columns(2)
     s_mold = stats["stats_grupos"]["Moldura"]
     s_miolo = stats["stats_grupos"]["Centro (Miolo)"]
     with col_mold:
-        st.metric("Moldura (Perímetro Externo)", f"{s_mold['total_saidas']} saídas", f"Média: {s_mold['media']:.2f} por sorteio")
-        st.caption(f"Variação no período: Mínimo {s_mold['min']} | Máximo {s_mold['max']} dezenas.")
+        st.metric("Moldura (Perímetro Externo)", f"{s_mold['total_saidas']} saídas", f"Média: {s_mold['media']:.2f}")
+        st.caption(f"Variação: Mínimo {s_mold['min']} | Máximo {s_mold['max']} dezenas.")
     with col_miolo:
-        st.metric("Miolo (Centro Interno)", f"{s_miolo['total_saidas']} saídas", f"Média: {s_miolo['media']:.2f} por sorteio")
-        st.caption(f"Variação no período: Mínimo {s_miolo['min']} | Máximo {s_miolo['max']} dezenas.")
+        st.metric("Miolo (Centro Interno)", f"{s_miolo['total_saidas']} saídas", f"Média: {s_miolo['media']:.2f}")
+        st.caption(f"Variação: Mínimo {s_miolo['min']} | Máximo {s_miolo['max']} dezenas.")
 
-    # Tabela Estatística das 8 Linhas
+    # Tabela 8 Linhas
     st.divider()
     st.subheader("📏 Estatísticas Individuais das 8 Linhas (Quina)")
     dados_linhas = []
@@ -1175,7 +1201,7 @@ with tab_hist:
     df_linhas = pd.DataFrame(dados_linhas).sort_values(by="Total Saídas", ascending=False)
     st.dataframe(df_linhas, use_container_width=True, height=320)
 
-    # Tabela Estatística das 10 Colunas
+    # Tabela 10 Colunas
     st.divider()
     st.subheader("📐 Estatísticas Individuais das 10 Colunas (Quina)")
     dados_colunas = []
@@ -1222,7 +1248,7 @@ with tab_hist:
     st.dataframe(df_diags, use_container_width=True, height=400)
 
 # ==============================================================================
-# ABA: VOLANTE VISUAL (8x10 EM PRETO E BRANCO)
+# ABA: VOLANTE VISUAL (8x10 EM AZUL QUINA)
 # ==============================================================================
 with tab_volante:
     st.subheader("Visualizador da Cartela Oficial da Quina (8x10)")
