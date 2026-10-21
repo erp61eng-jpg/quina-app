@@ -49,7 +49,6 @@ def get_primos_quina():
 
 @st.cache_data
 def get_moldura_quina():
-    """Linhas 1 e 8 + Colunas 1 e 10 (Total: 32 dezenas)."""
     mold = set(range(1, 11)) | set(range(71, 81))
     for r in range(8):
         mold.add(r * 10 + 1)
@@ -58,13 +57,11 @@ def get_moldura_quina():
 
 @st.cache_data
 def get_miolo_quina():
-    """Centro interno da matriz 8x10 (Total: 48 dezenas)."""
     mold_set = set(get_moldura_quina())
     return [n for n in range(1, 81) if n not in mold_set]
 
 @st.cache_data
 def get_quadrantes_quina():
-    """4 quadrantes de 20 dezenas (4 linhas x 5 colunas cada)."""
     q1, q2, q3, q4 = [], [], [], []
     for r in range(8):
         for c in range(10):
@@ -259,10 +256,64 @@ def calcular_estatisticas_dinamicas(historico_fatia, grupos_base):
     }
 
 # ==============================================================================
-# 4. RENDERIZADORES COLORIDOS (QUINA) & HEATMAP 8x10
+# 4. RENDERIZADORES: HEATMAP TÉRMICO VIVO & VOLANTE VIBRANTE
 # ==============================================================================
+def renderizar_heatmap_8x10_vibrante(cnt_dezenas, titulo="Mapa de Calor Térmico da Quina (80 Dezenas)"):
+    todos_valores = [cnt_dezenas[n] for n in range(1, 81)]
+    val_min = min(todos_valores) if todos_valores else 0
+    val_max = max(todos_valores) if todos_valores else 1
+    delta = max(1, val_max - val_min)
+
+    def obter_estilo_calor(freq):
+        ratio = (freq - val_min) / delta
+        if ratio == 0.0 or freq == 0:
+            return "#e0f2fe", "#0284c7"  # Azul Gelo (Fria)
+        elif ratio <= 0.25:
+            return "#38bdf8", "#0369a1"  # Ciano Vivo (Baixa)
+        elif ratio <= 0.50:
+            return "#4ade80", "#065f46"  # Verde Primavera (Média)
+        elif ratio <= 0.70:
+            return "#facc15", "#854d0e"  # Amarelo Sol (Aquecida)
+        elif ratio <= 0.88:
+            return "#fb923c", "#ffffff"  # Laranja Fogo (Quente)
+        else:
+            return "#ef4444", "#ffffff"  # Vermelho Rubi Vivo (Super Quente)
+
+    html = f"""
+    <div style="background:#ffffff; border:2px solid #cbd5e1; border-radius:16px; padding:20px; width:fit-content; margin:15px auto; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+        <div style="font-size:18px; font-weight:800; color:#0369a1; text-align:center; margin-bottom:16px; font-family:sans-serif; letter-spacing:0.5px;">
+            {titulo}
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(10, 52px); gap:6px; justify-content:center;">
+    """
+
+    for r in range(8):
+        for c in range(10):
+            num = r * 10 + c + 1
+            f = cnt_dezenas[num]
+            bg, text_color = obter_estilo_calor(f)
+            html += f"""
+            <div style="width:52px; height:52px; background:{bg}; color:{text_color}; border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:monospace; border:1px solid rgba(0,0,0,0.1); box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+                <span style="font-size:16px; font-weight:900; line-height:1.1;">{num:02d}</span>
+                <span style="font-size:11px; font-weight:800; opacity:0.95;">{f}x</span>
+            </div>
+            """
+
+    html += f"""
+        </div>
+        <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-top:18px; font-size:12px; font-family:sans-serif; font-weight:700;">
+            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#e0f2fe; border:1px solid #cbd5e1; display:inline-block;"></span> ❄️ Frias / Zero ({val_min}x)</div>
+            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#38bdf8; display:inline-block;"></span> 💧 Baixas</div>
+            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#4ade80; display:inline-block;"></span> 🌿 Médias</div>
+            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#facc15; display:inline-block;"></span> ☀️ Aquecidas</div>
+            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#fb923c; display:inline-block;"></span> 🔥 Quentes</div>
+            <div style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:4px 10px; border-radius:8px; border:1px solid #e2e8f0;"><span style="width:14px; height:14px; border-radius:4px; background:#ef4444; display:inline-block;"></span> 💥 Top Quentes ({val_max}x)</div>
+        </div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
 def renderizar_card_aposta_colorido(idx, jogo, extra=""):
-    """Renderiza a aposta com dezenas em globos de loteria azuis e badges de identificação."""
     dezenas_html = "".join([
         f"<span style='display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; background:linear-gradient(135deg, #0284c7, #0369a1); color:#ffffff; font-weight:800; font-size:14px; border-radius:50%; margin:0 3px; box-shadow:0 2px 5px rgba(2,132,199,0.35); font-family:monospace;'>{n:02d}</span>"
         for n in jogo
@@ -284,7 +335,6 @@ def renderizar_card_aposta_colorido(idx, jogo, extra=""):
     st.markdown(html, unsafe_allow_html=True)
 
 def renderizar_card_conferencia_colorido(idx, jogo, acertos, tag, qtd):
-    """Renderiza a conferência com destaque em verde esmeralda para acertos e badges por faixa de premiação."""
     dezenas_html = ""
     for n in jogo:
         if n in acertos:
@@ -318,99 +368,27 @@ def renderizar_card_conferencia_colorido(idx, jogo, acertos, tag, qtd):
     """
     st.markdown(html, unsafe_allow_html=True)
 
-def renderizar_heatmap_8x10(cnt_dezenas, titulo="Mapa de Calor da Quina (Matriz 8x10)"):
-    val_min = min(cnt_dezenas.values()) if cnt_dezenas else 0
-    val_max = max(cnt_dezenas.values()) if cnt_dezenas else 1
-    delta = max(1, val_max - val_min)
-
-    def obter_estilo_calor(freq):
-        ratio = (freq - val_min) / delta
-        if ratio <= 0.25:
-            return "#1e3a8a", "#93c5fd"
-        elif ratio <= 0.50:
-            return "#0284c7", "#e0f2fe"
-        elif ratio <= 0.75:
-            return "#d97706", "#ffffff"
-        else:
-            return "#b91c1c", "#ffffff"
-
-    html = f"""
+def renderizar_volante_8x10(jogo, titulo=""):
+    marcadas = set(jogo)
+    grid_html = f"""
     <style>
-        .heat-wrapper {{
-            background: #0f172a;
-            border: 2px solid #334155;
-            border-radius: 12px;
-            padding: 18px;
-            width: fit-content;
-            margin: 12px auto;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-        }}
-        .heat-title {{
-            font-size: 15px;
-            font-weight: 700;
-            color: #38bdf8;
-            text-align: center;
-            margin-bottom: 12px;
-            letter-spacing: 0.5px;
-        }}
-        .heat-grid {{
-            display: grid;
-            grid-template-columns: repeat(10, 48px);
-            gap: 6px;
-        }}
-        .heat-cell {{
-            width: 48px;
-            height: 48px;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: monospace;
-            border: 1px solid rgba(255,255,255,0.12);
-        }}
-        .heat-num {{ font-size: 13px; font-weight: 800; line-height: 1.1; }}
-        .heat-freq {{ font-size: 9.5px; font-weight: 600; opacity: 0.88; }}
-        .heat-legend {{
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            margin-top: 14px;
-            font-size: 11px;
-            font-family: sans-serif;
-            color: #94a3b8;
-        }}
-        .legend-tag {{ display: flex; align-items: center; gap: 5px; }}
-        .legend-box {{ width: 12px; height: 12px; border-radius: 3px; }}
+        .volante-box {{ background:#ffffff; border:2px solid #0284c7; border-radius:14px; padding:16px; width:fit-content; margin:12px auto; box-shadow:0 4px 16px rgba(2,132,199,0.15); }}
+        .volante-grid {{ display:grid; grid-template-columns:repeat(10, 38px); gap:6px; }}
+        .v-cell {{ width:38px; height:38px; border:1px solid #cbd5e1; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px; color:#475569; background:#f8fafc; font-weight:600; transition:all 0.2s; }}
+        .v-marcada {{ background:linear-gradient(135deg, #0284c7, #0369a1) !important; color:#ffffff !important; border:2px solid #075985 !important; font-weight:800 !important; box-shadow:0 2px 8px rgba(2,132,199,0.45); transform:scale(1.05); }}
     </style>
-    <div class="heat-wrapper">
-        <div class="heat-title">{titulo}</div>
-        <div class="heat-grid">
+    <div class="volante-box">
     """
-
+    if titulo:
+        grid_html += f"<p style='font-weight:800; font-size:16px; margin-bottom:12px; color:#0369a1; text-align:center; letter-spacing:0.5px;'>{titulo}</p>"
+    grid_html += '<div class="volante-grid">'
     for r in range(8):
         for c in range(10):
             num = r * 10 + c + 1
-            f = cnt_dezenas[num]
-            bg, text_color = obter_estilo_calor(f)
-            html += f"""
-            <div class="heat-cell" style="background:{bg}; color:{text_color};">
-                <span class="heat-num">{num:02d}</span>
-                <span class="heat-freq">{f}x</span>
-            </div>
-            """
-
-    html += f"""
-        </div>
-        <div class="heat-legend">
-            <div class="legend-tag"><div class="legend-box" style="background:#1e3a8a;"></div> Frias ({val_min}x)</div>
-            <div class="legend-tag"><div class="legend-box" style="background:#0284c7;"></div> Moderadas</div>
-            <div class="legend-tag"><div class="legend-box" style="background:#d97706;"></div> Aquecidas</div>
-            <div class="legend-tag"><div class="legend-box" style="background:#b91c1c;"></div> Super Quentes ({val_max}x)</div>
-        </div>
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+            cls = "v-cell v-marcada" if num in marcadas else "v-cell"
+            grid_html += f'<div class="{cls}">{num:02d}</div>'
+    grid_html += "</div></div>"
+    st.markdown(grid_html, unsafe_allow_html=True)
 
 # ==============================================================================
 # 5. CONTROLE DE ESTADO & REGRAS
@@ -603,28 +581,6 @@ def ler_arquivo_jogos_txt(conteudo_texto):
             if len(cands) >= 5:
                 jogos.append(sorted(cands[:5]))
     return jogos
-
-def renderizar_volante_8x10(jogo, titulo=""):
-    marcadas = set(jogo)
-    grid_html = f"""
-    <style>
-        .volante-box {{ background:#ffffff; border:2px solid #0284c7; border-radius:14px; padding:16px; width:fit-content; margin:12px auto; box-shadow:0 4px 16px rgba(2,132,199,0.15); }}
-        .volante-grid {{ display:grid; grid-template-columns:repeat(10, 38px); gap:6px; }}
-        .v-cell {{ width:38px; height:38px; border:1px solid #cbd5e1; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:13px; color:#475569; background:#f8fafc; font-weight:600; transition:all 0.2s; }}
-        .v-marcada {{ background:linear-gradient(135deg, #0284c7, #0369a1) !important; color:#ffffff !important; border:2px solid #075985 !important; font-weight:800 !important; box-shadow:0 2px 8px rgba(2,132,199,0.45); transform:scale(1.05); }}
-    </style>
-    <div class="volante-box">
-    """
-    if titulo:
-        grid_html += f"<p style='font-weight:800; font-size:16px; margin-bottom:12px; color:#0369a1; text-align:center; letter-spacing:0.5px;'>{titulo}</p>"
-    grid_html += '<div class="volante-grid">'
-    for r in range(8):
-        for c in range(10):
-            num = r * 10 + c + 1
-            cls = "v-cell v-marcada" if num in marcadas else "v-cell"
-            grid_html += f'<div class="{cls}">{num:02d}</div>'
-    grid_html += "</div></div>"
-    st.markdown(grid_html, unsafe_allow_html=True)
 
 # ==============================================================================
 # 8. INTERFACE PRINCIPAL
@@ -1153,7 +1109,7 @@ with tab_filtros:
 with tab_hist:
     st.subheader("🔥 Mapa de Calor Térmico da Quina (Heatmap 8x10)")
     st.caption(f"Frequência absoluta das 80 dezenas no recorte dos últimos {qtd_analise} sorteios:")
-    renderizar_heatmap_8x10(stats["cnt_dezenas"], titulo=f"Heatmap das 80 Dezenas — Últimos {qtd_analise} Concursos")
+    renderizar_heatmap_8x10_vibrante(stats["cnt_dezenas"], titulo=f"Heatmap das 80 Dezenas — Últimos {qtd_analise} Concursos")
 
     st.divider()
     st.subheader(f"Últimos {qtd_analise} Concursos Analisados")
